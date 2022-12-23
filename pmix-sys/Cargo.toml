@@ -1,0 +1,9 @@
+[package]
+name = "pmix-sys"
+version = "0.1.0"
+edition = "2021"
+
+# [target.'cfg(unix)'.build-dependencies]
+[build-dependencies]
+pkg-config = "0.3.26"
+bindgen = "0.63.0"

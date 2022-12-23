@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "pmix-sys",
+    "ucx2-sys",
+    "ucp-client-server",
+]
