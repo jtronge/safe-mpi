@@ -21,6 +21,7 @@ pub struct WorkerParams {
 }
 
 impl AsRef<ucp_worker_params_t> for WorkerParams {
+    #[inline]
     fn as_ref(&self) -> &ucp_worker_params_t {
         &self.inner
     }

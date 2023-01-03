@@ -1,7 +1,7 @@
-use std::default::Default;
-use std::os::raw::c_void;
-use std::marker::PhantomData;
 use std::convert::AsRef;
+use std::default::Default;
+use std::marker::PhantomData;
+use std::os::raw::c_void;
 use nix::sys::socket::SockaddrLike;
 use ucx2_sys::{
     ucp_listener_params_t,
@@ -21,6 +21,7 @@ pub struct ListenerParams<'a> {
 }
 
 impl<'a> AsRef<ucp_listener_params_t> for ListenerParams<'a> {
+    #[inline]
     fn as_ref(&self) -> &ucp_listener_params_t {
         &self.inner
     }
@@ -77,6 +78,7 @@ impl<'a> ListenerParams<'a> {
 }
 
 impl InternalDefault for ucp_listener_accept_handler_t {
+    #[inline]
     fn default() -> Self {
         Self {
             cb: None,
@@ -86,6 +88,7 @@ impl InternalDefault for ucp_listener_accept_handler_t {
 }
 
 impl InternalDefault for ucp_listener_conn_handler_t {
+    #[inline]
     fn default() -> Self {
         Self {
             cb: None,
@@ -95,6 +98,7 @@ impl InternalDefault for ucp_listener_conn_handler_t {
 }
 
 impl InternalDefault for ucp_listener_params_t {
+    #[inline]
     fn default() -> Self {
         Self {
             field_mask: 0,

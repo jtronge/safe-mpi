@@ -2,5 +2,6 @@
 members = [
     "pmix-sys",
     "ucx2-sys",
+    "ucp",
     "ucp-client-server",
 ]
