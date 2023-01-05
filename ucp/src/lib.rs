@@ -12,6 +12,7 @@ pub mod consts {
         UCP_EP_PARAM_FIELD_ERR_HANDLER,
         UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE,
         UCP_EP_CLOSE_MODE_FLUSH,
+        UCP_EP_CLOSE_MODE_FORCE,
         UCP_OP_ATTR_FIELD_FLAGS,
         UCP_OP_ATTR_FIELD_CALLBACK,
         UCP_OP_ATTR_FIELD_DATATYPE,
@@ -30,6 +31,7 @@ pub use ucx2_sys::{
     ucs_status_t,
     ucp_dt_iov_t,
     ucp_ep_h,
+    ucs_status_string,
 };
 mod defaults;
 pub use defaults::{

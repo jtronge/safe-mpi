@@ -1,6 +1,7 @@
 use ucx2_sys::{
     ucs_status_ptr_t,
     ucp_request_check_status,
+    ucp_request_free,
     ucs_status_t,
 };
 use crate::RequestParam;
@@ -33,5 +34,10 @@ impl<'a> Request<'a> {
 
     pub unsafe fn status(&self) -> ucs_status_t {
         ucp_request_check_status(self.req_ptr.unwrap())
+    }
+
+    /// Take ownership of the request and free it.
+    pub unsafe fn free(self) {
+        ucp_request_free(self.req_ptr.unwrap());
     }
 }

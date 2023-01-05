@@ -1,11 +1,19 @@
 use ucx2_sys::{
     ucp_ep_h,
     ucp_ep_create,
+    ucp_ep_close_nbx,
+    ucp_request_check_status,
+    ucp_request_free,
     ucp_tag_t,
     UCS_OK,
     ucp_tag_send_nbx,
     rust_ucs_ptr_is_err,
+    rust_ucs_ptr_is_ptr,
+    rust_ucs_ptr_status,
+    ucs_status_string,
     UCP_DATATYPE_CONTIG,
+    UCP_OP_ATTR_FIELD_FLAGS,
+    UCP_EP_CLOSE_MODE_FLUSH,
 };
 use std::mem::MaybeUninit;
 use super::{Worker, Request, RequestParam, EndpointParams};
@@ -58,12 +66,29 @@ impl<'a> Endpoint<'a> {
         Ok(Request::from_raw(req_ptr, param))
     }
 
-    /// Return a non-blocking request that can be used to close the endpoint.
-    pub unsafe fn close_nbx<'b>(
-        self,
-        param: RequestParam,
-    ) -> Result<Request<'b>, ()> {
-        // TODO
-        Err(())
+    /// Close the endpoint.
+    pub unsafe fn close(self, worker: Worker, flags: u32) {
+        let param = RequestParam::default()
+            .op_attr_mask(UCP_OP_ATTR_FIELD_FLAGS)
+            .flags(flags);
+        let close_req = ucp_ep_close_nbx(self.ep, param.as_ref());
+        let status = if rust_ucs_ptr_is_ptr(close_req) != 0 {
+            let mut status = UCS_OK;
+            loop {
+                worker.progress();
+                status = ucp_request_check_status(close_req);
+                if status == UCS_OK {
+                    break;
+                }
+            }
+            ucp_request_free(close_req);
+            status
+        } else {
+            rust_ucs_ptr_status(close_req)
+        };
+
+        if status != UCS_OK {
+            panic!("Failed to close endpoint");
+        }
     }
 }

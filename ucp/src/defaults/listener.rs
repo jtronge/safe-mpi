@@ -90,7 +90,6 @@ impl<'a> ListenerParams<'a> {
         let arg = Box::into_raw(Box::new(f));
         self.inner.conn_handler.cb = Some(listener_conn_callback);
         self.inner.conn_handler.arg = arg as *mut _;
-        println!("arg ptr: {}", arg as usize);
         self
     }
 }
@@ -105,7 +104,6 @@ impl<'a> Drop for ListenerParams<'a> {
                 );
             }
             if let Some(_) = self.inner.conn_handler.cb {
-                println!("arg ptr: {}", self.inner.conn_handler.arg as usize);
                 let _ = Box::from_raw(
                     self.inner.conn_handler.arg as *mut Box<dyn Fn(ConnRequest)>
                 );
