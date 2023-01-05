@@ -7,6 +7,7 @@ use ucp::{
     Worker,
     Listener,
     Endpoint,
+    ConnRequest,
     ucs_status_t,
     ucp_ep_h,
     ucp_dt_iov_t,
@@ -38,72 +39,54 @@ use std::str::FromStr;
 use std::net::Ipv4Addr;
 use std::os::raw::c_void;
 use nix::sys::socket::SockaddrIn;
+use std::rc::Rc;
+use std::cell::RefCell;
+
+struct ListenerContext {
+    request: Option<ConnRequest>,
+}
 
 fn server(context: Context, worker: Worker, listen_addr: SockaddrIn) {
     // TODO
+    println!("before wparams");
     let wparams = WorkerParams::default()
         .field_mask(UCP_WORKER_PARAM_FIELD_THREAD_MODE.into())
         .thread_mode(UCS_THREAD_MODE_SINGLE);
+    println!("after wparams");
     let data_worker = Worker::new(context, &wparams);
+    println!("data_worker has been created");
+    let listen_ctx = Rc::new(RefCell::new(ListenerContext { request: None }));
     let lparams = ListenerParams::default()
+        .conn_handler(|conn_req| {
+            let listen_ctx = Rc::clone(&listen_ctx);
+            let _ = *listen_ctx.borrow_mut().request.insert(conn_req);
+            println!("In connection handler");
+        })
         .field_mask((UCP_LISTENER_PARAM_FIELD_SOCK_ADDR
                      | UCP_LISTENER_PARAM_FIELD_CONN_HANDLER).into())
         .sockaddr(&listen_addr);
-    let listener = Listener::new(worker, &lparams);
+    println!("created lparams");
+    let listener = Listener::new(worker, lparams);
+    println!("listener was created");
 
     // Create a listener on the first worker
-
-/*
-    loop {
-        // Wait until a request comes in
-        while (arg.request) {
-            ucp_worker_progress(worker);
-        }
-
-        // Create and endpoint the given client and request
-        let status = create_ep(data_worker, arg.request, &server_ep);
-        if status != UCS_OK {
-            panic!("create_ep() failed");
-        }
-
-        work(data_worker, server_ep, 1);
-
-        // Close endpoint
-        close_ep(data_worker, server_ep, UCP_EP_CLOSE_MODE_FORCE);
-        arg.request = std::ptr::null_mut();
-    }
-*/
 }
 
 const PORT: u16 = 5678;
-
-// Error callback
-extern "C" fn err_cb(_arg: *mut c_void, _ep: ucp_ep_h, _status: ucs_status_t) {
-    println!("In error handler");
-}
-
-// Send callback
-extern "C" fn send_cb(_request: *mut c_void, _status: ucs_status_t, _user_data: *mut c_void) {
-    println!("In send handler");
-}
-
 const TAG: u64 = 100;
 
-fn client(context: Context, worker: Worker, server_addr: &str) {
-    let addr = Ipv4Addr::from_str(server_addr)
-        .expect("Failed to parse listen address");
-    let ip = addr.octets();
-/*
-    let addr = unsafe {
-        let mut store = MaybeUninit::<SockaddrStorage>::uninit().assume_init();
-        let sa_in = store.as_sockaddr_in_mut().unwrap();
-        *sa_in = SockaddrIn::new(ip[0], ip[1], ip[2], ip[3], PORT);
-        store.as_sockaddr_in().unwrap().as_ptr()
-    };
-*/
-    let sa_in = SockaddrIn::new(ip[0], ip[1], ip[2], ip[3], PORT);
-    // let addr = sa_in.as_ptr();
+unsafe fn client_work_loop(ep: Endpoint) {
+    // Send 1024 messages
+    for _ in 0..1024 {
+    }
+}
 
+/// Create and return the client endpoint
+fn create_client_endpoint<'a>(
+    context: Context,
+    worker: Worker,
+    server_addr: &'a SockaddrIn,
+) -> Endpoint<'a> {
     // Create the endpoint (based on start_client())
     let field_mask = UCP_EP_PARAM_FIELD_FLAGS
                      | UCP_EP_PARAM_FIELD_SOCK_ADDR
@@ -112,83 +95,56 @@ fn client(context: Context, worker: Worker, server_addr: &str) {
     let params = EndpointParams::default()
         .field_mask(field_mask.into())
         .err_mode(UCP_ERR_HANDLING_MODE_PEER)
-        .err_handler(Some(err_cb), std::ptr::null_mut())
+        .err_handler(|_, _| {
+            println!("In err handler for endpoint");
+        })
         .flags(UCP_EP_PARAMS_FLAGS_CLIENT_SERVER)
-        .sockaddr(&sa_in);
+        .sockaddr(server_addr);
 
-    let ep = Endpoint::new(worker, &params);
+    Endpoint::new(worker, params)
+}
+
+fn addr_to_sa_in(addr: &str, port: u16) -> SockaddrIn {
+    let addr = Ipv4Addr::from_str(addr)
+        .expect("Failed to parse listen address");
+    let ip = addr.octets();
+    SockaddrIn::new(ip[0], ip[1], ip[2], ip[3], port)
+}
+
+fn client(context: Context, worker: Worker, server_addr: &str) {
+    let server_addr = addr_to_sa_in(server_addr, PORT);
+    let ep = create_client_endpoint(context, worker, &server_addr);
+
+    // Shared boolean indicating whether a request has completed or not
+    let complete = Rc::new(RefCell::new(false));
 
     // TODO: Do work
     // Allocate the buffer
-    let count = 128;
-    let size = 128;
-    let mut iov_buf = vec![];
-    let layout = Layout::array::<u8>(size).expect("Could not create layout");
-    println!("Allocating IOV");
-    for _ in 0..count {
-        unsafe {
-            iov_buf.push(ucp_dt_iov_t {
-                buffer: alloc(layout) as *mut _,
-                length: layout.size(),
-            });
-        }
-    }
 
+    let count = 128;
     let buf = vec![0; count];
     let param = RequestParam::default()
         .op_attr_mask(UCP_OP_ATTR_FIELD_CALLBACK
                       | UCP_OP_ATTR_FIELD_DATATYPE
                       | UCP_OP_ATTR_FIELD_USER_DATA)
-        .cb_send(Some(send_cb))
-        .datatype(UCP_DATATYPE_IOV.into())
+        .cb_send(|_, _| {
+            println!("QUI");
+            let complete = Rc::clone(&complete);
+            // *complete.borrow_mut() = true;
+            println!("In cb_send callback!");
+        })
+        .datatype(UCP_DATATYPE_CONTIG.into())
         .memory_type(UCS_MEMORY_TYPE_HOST.into());
-/*
-    let param = ucp_request_param_t {
-        op_attr_mask: UCP_OP_ATTR_FIELD_CALLBACK
-                      | UCP_OP_ATTR_FIELD_DATATYPE
-                      | UCP_OP_ATTR_FIELD_USER_DATA,
-        flags: 0,
-        request: std::ptr::null_mut(),
-        cb: ucp_request_param_t__bindgen_ty_1 {
-            send: Some(send_cb),
-        },
-        // Sending an IOV
-        datatype: UCP_DATATYPE_IOV.into(),
-        user_data: std::ptr::null_mut(),
-        reply_buffer: std::ptr::null_mut(),
-        memory_type: UCS_MEMORY_TYPE_HOST.into(),
-        recv_info: ucp_request_param_t__bindgen_ty_2 {
-            length: std::ptr::null_mut(),
-        }
-    };
-*/
 
-    unsafe {
-        let req = ep.tag_send_nbx(&buf, TAG, &param).expect("tag_send_nbx() failed");
+    let status = unsafe {
+        let req = ep.tag_send_nbx(&buf, TAG, param).expect("tag_send_nbx() failed");
 
         // Wait for the request to complete
-        for _ in 0..1024 {
+        while !*complete.borrow() {
             worker.progress();
         }
-        let status = req.status();
-/*
-        // Wait for the request to complete
-        for i in 0..1024 {
-            ucp_worker_progress(worker.into_raw());
-        }
-        let status = ucp_request_check_status(req);
-        ucp_request_free(req);
-*/
-    }
-        // ucp_tag_send_nbx()
-        // ucp_tag_recv_nbx()
-
-    println!("Deallocating IOV");
-    for iov in iov_buf {
-        unsafe {
-            dealloc(iov.buffer as *mut _, layout);
-        }
-    }
+        req.status()
+    };
 
     // Close the server endpoint
     let param = RequestParam::default()
@@ -197,29 +153,8 @@ fn client(context: Context, worker: Worker, server_addr: &str) {
         .datatype(UCP_DATATYPE_CONTIG.into())
         .memory_type(UCS_MEMORY_TYPE_HOST.into());
     unsafe {
-        let close_req = ep.close_nbx(&param)
+        let close_req = ep.close_nbx(param)
             .expect("endpoint close_nbx() failed");
-/*
-        let close_req = ucp_ep_close_nbx(ep, &param);
-        let status = if rust_ucs_ptr_is_ptr(close_req) != 0 {
-            let mut status = UCS_OK;
-            loop {
-                ucp_worker_progress(worker.into_raw());
-                status = ucp_request_check_status(close_req);
-                if status != UCS_INPROGRESS {
-                    break;
-                }
-            }
-            ucp_request_free(close_req);
-            status
-        } else {
-            rust_ucs_ptr_status(close_req)
-        };
-
-        if status != UCS_OK {
-            panic!("Failed to close endpoint");
-        }
-*/
     }
 }
 

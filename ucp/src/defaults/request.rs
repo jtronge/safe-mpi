@@ -9,15 +9,32 @@ use ucx2_sys::{
     ucp_request_param_t__bindgen_ty_2,
     ucp_send_nbx_callback_t,
     ucp_tag_recv_nbx_callback_t,
+    ucp_tag_recv_info_t,
     ucp_stream_recv_nbx_callback_t,
     ucp_am_recv_data_nbx_callback_t,
+    ucs_status_t,
+    UCS_OK,
 };
 use super::InternalDefault;
+use crate::callbacks::{
+    send_nbx_callback,
+    tag_recv_nbx_callback,
+    stream_and_am_recv_nbx_callback,
+};
+use crate::Request;
 
-#[repr(transparent)]
 #[derive(Copy, Clone)]
+enum CallbackType {
+    Send,
+    Recv,
+    RecvStream,
+    RecvAM,
+}
+
+#[derive(Clone)]
 pub struct RequestParam {
     inner: ucp_request_param_t,
+    callback_type: Option<CallbackType>,
 }
 
 impl AsRef<ucp_request_param_t> for RequestParam {
@@ -32,6 +49,7 @@ impl Default for RequestParam {
     fn default() -> Self {
         Self {
             inner: ucp_request_param_t::default(),
+            callback_type: None,
         }
     }
 }
@@ -49,27 +67,54 @@ impl RequestParam {
         self
     }
 
+    // TODO: Where to free this?
     #[inline]
-    pub fn cb_send(mut self, cb: ucp_send_nbx_callback_t) -> Self {
-        self.inner.cb.send = cb;
+    pub fn cb_send<F>(mut self, f: F) -> Self
+    where
+        F: Fn(Request, ucs_status_t),
+    {
+        let f: Box<dyn Fn(Request, ucs_status_t)> = Box::new(f);
+        self.inner.user_data = Box::into_raw(Box::new(f)) as *mut _;
+        self.inner.cb.send = Some(send_nbx_callback);
+        self.callback_type.insert(CallbackType::Send);
         self
     }
 
     #[inline]
-    pub fn cb_recv(mut self, cb: ucp_tag_recv_nbx_callback_t) -> Self {
-        self.inner.cb.recv = cb;
+    pub fn cb_recv<F>(mut self, f: F) -> Self
+    where
+        F: Fn(Request, ucs_status_t, *const ucp_tag_recv_info_t),
+    {
+        let f: Box<
+            dyn Fn(Request, ucs_status_t, *const ucp_tag_recv_info_t)
+        > = Box::new(f);
+        self.inner.user_data = Box::into_raw(Box::new(f)) as *mut _;
+        self.inner.cb.recv = Some(tag_recv_nbx_callback);
+        self.callback_type.insert(CallbackType::Recv);
         self
     }
 
     #[inline]
-    pub fn cb_recv_stream(mut self, cb: ucp_stream_recv_nbx_callback_t) -> Self {
-        self.inner.cb.recv_stream = cb;
+    pub fn cb_recv_stream<F>(mut self, f: F) -> Self
+    where
+        F: Fn(Request, ucs_status_t, usize),
+    {
+        let f: Box<dyn Fn(Request, ucs_status_t, usize)> = Box::new(f);
+        self.inner.user_data = Box::into_raw(Box::new(f)) as *mut _;
+        self.inner.cb.recv_stream = Some(stream_and_am_recv_nbx_callback);
+        self.callback_type.insert(CallbackType::RecvStream);
         self
     }
 
     #[inline]
-    pub fn cb_recv_am(mut self, cb: ucp_am_recv_data_nbx_callback_t) -> Self {
-        self.inner.cb.recv_am = cb;
+    pub fn cb_recv_am<F>(mut self, f: F) -> Self
+    where
+        F: Fn(Request, ucs_status_t, usize),
+    {
+        let f: Box<dyn Fn(Request, ucs_status_t, usize)> = Box::new(f);
+        self.inner.user_data = Box::into_raw(Box::new(f)) as *mut _;
+        self.inner.cb.recv_am = Some(stream_and_am_recv_nbx_callback);
+        self.callback_type.insert(CallbackType::RecvAM);
         self
     }
 
@@ -83,6 +128,42 @@ impl RequestParam {
     pub fn memory_type(mut self, memory_type: ucs_memory_type_t) -> Self {
         self.inner.memory_type = memory_type;
         self
+    }
+}
+
+impl Drop for RequestParam {
+    fn drop(&mut self) {
+        if let Some(callback_type) = self.callback_type {
+            unsafe {
+                match callback_type {
+                    CallbackType::Send => {
+                        let _ = Box::from_raw(
+                            self.inner.user_data as *mut Box<
+                                dyn Fn(Request, ucs_status_t)
+                            >
+                        );
+                    }
+                    CallbackType::Recv => {
+                        let _ = Box::from_raw(
+                            self.inner.user_data as *mut Box<
+                                dyn Fn(
+                                    Request,
+                                    ucs_status_t,
+                                    *const ucp_tag_recv_info_t,
+                                )
+                            >
+                        );
+                    }
+                    CallbackType::RecvStream | CallbackType::RecvAM => {
+                        let _ = Box::from_raw(
+                            self.inner.user_data as *mut Box<
+                                dyn Fn(Request, ucs_status_t, usize)
+                            >
+                        );
+                    }
+                }
+            }
+        }
     }
 }
 

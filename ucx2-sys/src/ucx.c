@@ -15,6 +15,11 @@ int rust_ucs_ptr_is_ptr(const void *ptr)
     return UCS_PTR_IS_PTR(ptr);
 }
 
+int rust_ucs_ptr_is_err(const void *ptr)
+{
+    return UCS_PTR_IS_ERR(ptr);
+}
+
 ucs_status_t rust_ucs_ptr_status(const void *ptr)
 {
     return UCS_PTR_STATUS(ptr);

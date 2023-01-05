@@ -14,4 +14,6 @@ pub use listener::Listener;
 mod endpoint;
 pub use endpoint::Endpoint;
 mod request;
-pub use request::{Request, Status};
+pub use request::Request;
+mod conn_request;
+pub use conn_request::ConnRequest;

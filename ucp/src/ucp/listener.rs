@@ -6,10 +6,13 @@ use ucx2_sys::{
 use std::mem::MaybeUninit;
 use super::{Worker, ListenerParams};
 
-pub struct Listener(ucp_listener_h);
+pub struct Listener<'a> {
+    listener: ucp_listener_h,
+    params: ListenerParams<'a>,
+}
 
-impl Listener {
-    pub fn new<'a>(worker: Worker, params: &ListenerParams<'a>) -> Listener {
+impl<'a> Listener<'a> {
+    pub fn new(worker: Worker, params: ListenerParams<'a>) -> Listener {
         unsafe {
             let mut listener = MaybeUninit::<ucp_listener_h>::uninit();
             let status = ucp_listener_create(worker.into_raw(), params.as_ref(),
@@ -19,7 +22,10 @@ impl Listener {
             }
             let listener = listener.assume_init();
             // TODO: query listening port
-            Listener(listener)
+            Listener {
+                listener,
+                params,
+            }
         }
     }
 }

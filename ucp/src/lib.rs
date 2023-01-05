@@ -1,17 +1,3 @@
-mod defaults;
-pub use defaults::{
-    ListenerParams,
-    WorkerParams,
-    EndpointParams,
-    RequestParam,
-};
-mod ucp;
-pub use ucp::{
-    Context,
-    Worker,
-    Listener,
-    Endpoint,
-};
 pub mod consts {
     pub use ucx2_sys::{
         UCP_PARAM_FIELD_FEATURES,
@@ -45,3 +31,20 @@ pub use ucx2_sys::{
     ucp_dt_iov_t,
     ucp_ep_h,
 };
+mod defaults;
+pub use defaults::{
+    ListenerParams,
+    WorkerParams,
+    EndpointParams,
+    RequestParam,
+};
+mod ucp;
+pub use ucp::{
+    Context,
+    Worker,
+    Listener,
+    Endpoint,
+    Request,
+    ConnRequest,
+};
+mod callbacks;

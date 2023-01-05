@@ -10,12 +10,15 @@ use ucx2_sys::{
     ucp_err_handler_cb_t,
     ucs_sock_addr_t,
     ucp_conn_request_h,
+    ucs_status_t,
     UCP_ERR_HANDLING_MODE_NONE,
 };
+use crate::Endpoint;
+use crate::callbacks::err_handler_cb;
 use super::InternalDefault;
 
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 pub struct EndpointParams<'a> {
     inner: ucp_ep_params_t,
     phantom_data: PhantomData<&'a ()>,
@@ -58,13 +61,14 @@ impl<'a> EndpointParams<'a> {
     }
 
     #[inline]
-    pub fn err_handler(
-        mut self,
-        cb: ucp_err_handler_cb_t,
-        arg: *mut c_void,
-    ) -> Self {
-        self.inner.err_handler.cb = cb;
-        self.inner.err_handler.arg = arg;
+    pub fn err_handler<F>(mut self, f: F) -> Self
+    where
+        F: Fn(Endpoint, ucs_status_t),
+    {
+        let f: Box<dyn Fn(Endpoint, ucs_status_t)> = Box::new(f);
+        let arg = Box::into_raw(Box::new(f));
+        self.inner.err_handler.cb = Some(err_handler_cb);
+        self.inner.err_handler.arg = arg as *mut _;
         self
     }
 
@@ -100,6 +104,20 @@ impl<'a> EndpointParams<'a> {
     pub fn name(mut self, name: *const c_char) -> Self {
         self.inner.name = name;
         self
+    }
+}
+
+impl<'a> Drop for EndpointParams<'a> {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(_) = self.inner.err_handler.cb {
+                let _ = Box::from_raw(
+                    self.inner.err_handler.arg as *mut Box<
+                        dyn Fn(Endpoint, ucs_status_t)
+                    >
+                );
+            }
+        }
     }
 }
 
