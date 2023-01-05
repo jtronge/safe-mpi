@@ -11,7 +11,7 @@ use ucp::{
     ucs_status_t,
     ucp_ep_h,
     ucp_dt_iov_t,
-    ucs_status_string,
+    status_to_string,
 };
 use ucp::consts::{
     UCP_WORKER_PARAM_FIELD_THREAD_MODE,
@@ -22,6 +22,7 @@ use ucp::consts::{
     UCP_EP_PARAM_FIELD_SOCK_ADDR,
     UCP_EP_PARAM_FIELD_ERR_HANDLER,
     UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE,
+    UCP_EP_PARAM_FIELD_CONN_REQUEST,
     UCP_EP_CLOSE_MODE_FLUSH,
     UCP_EP_CLOSE_MODE_FORCE,
     UCP_OP_ATTR_FIELD_FLAGS,
@@ -64,19 +65,42 @@ fn server(context: Context, worker: Worker, listen_addr: SockaddrIn) {
         .field_mask((UCP_LISTENER_PARAM_FIELD_SOCK_ADDR
                      | UCP_LISTENER_PARAM_FIELD_CONN_HANDLER).into())
         .sockaddr(&listen_addr);
+    // Create a listener on the first worker
     let listener = Listener::new(worker, lparams);
 
-    // Create a listener on the first worker
+    loop {
+        println!("listening for next connection...");
+        // Wait until we receive a connection request from the client (with
+        // simultaneous requests, only the first is accepted and all others are
+        // rejected).
+        while listen_ctx.borrow().request.is_none() {
+            unsafe {
+                worker.progress();
+            }
+        }
+
+        let conn_request = listen_ctx.borrow_mut().request.take().unwrap();
+        // Create an endpoint to the client with the data worker
+        let field_mask = UCP_EP_PARAM_FIELD_ERR_HANDLER
+                         | UCP_EP_PARAM_FIELD_CONN_REQUEST;
+        let ep_params = EndpointParams::default()
+            .field_mask(field_mask.into())
+            .conn_request(conn_request)
+            .err_handler(|_ep, status| {
+                println!("status in data worker error handler: {}",
+                         status_to_string(status));
+            });
+        let data_ep = Endpoint::new(data_worker, ep_params);
+
+        // TODO: Do work
+        unsafe {
+            data_ep.close(data_worker, UCP_EP_CLOSE_MODE_FORCE);
+        }
+    }
 }
 
 const PORT: u16 = 5678;
 const TAG: u64 = 100;
-
-unsafe fn client_work_loop(ep: Endpoint) {
-    // Send 1024 messages
-    for _ in 0..1024 {
-    }
-}
 
 /// Create and return the client endpoint
 fn create_client_endpoint<'a>(
@@ -92,7 +116,8 @@ fn create_client_endpoint<'a>(
     let params = EndpointParams::default()
         .field_mask(field_mask.into())
         .err_mode(UCP_ERR_HANDLING_MODE_PEER)
-        .err_handler(|_, _| {
+        .err_handler(|_ep, status| {
+            println!("status: {}", status_to_string(status));
             println!("In err handler for endpoint");
         })
         .flags(UCP_EP_PARAMS_FLAGS_CLIENT_SERVER)
@@ -146,8 +171,7 @@ fn client(context: Context, worker: Worker, server_addr: &str) {
         status
     };
     if status != UCS_OK {
-        let s = unsafe { ucs_status_string(status) };
-        println!("{:?}", s);
+        println!("status: {}", status_to_string(status));
     }
 
     // Close the server endpoint

@@ -9,4 +9,8 @@ impl ConnRequest {
     pub fn from_raw(conn_request: ucp_conn_request_h) -> ConnRequest {
         ConnRequest(conn_request)
     }
+
+    pub fn into_raw(&self) -> ucp_conn_request_h {
+        self.0
+    }
 }

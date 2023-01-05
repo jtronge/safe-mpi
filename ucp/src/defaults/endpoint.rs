@@ -13,7 +13,10 @@ use ucx2_sys::{
     ucs_status_t,
     UCP_ERR_HANDLING_MODE_NONE,
 };
-use crate::Endpoint;
+use crate::{
+    Endpoint,
+    ConnRequest,
+};
 use crate::callbacks::err_handler_cb;
 use super::InternalDefault;
 
@@ -95,8 +98,8 @@ impl<'a> EndpointParams<'a> {
     }
 
     #[inline]
-    pub fn conn_request(mut self, conn_request: ucp_conn_request_h) -> Self {
-        self.inner.conn_request = conn_request;
+    pub fn conn_request(mut self, conn_request: ConnRequest) -> Self {
+        self.inner.conn_request = conn_request.into_raw();
         self
     }
 
