@@ -4,6 +4,7 @@ use ucx2_sys::{
     rust_ucp_init,
     UCP_PARAM_FIELD_FEATURES,
     UCP_FEATURE_AM,
+    UCP_FEATURE_TAG,
     UCS_OK,
     ucp_cleanup,
 };
@@ -20,7 +21,7 @@ impl Context {
     
         let mut params: ucp_params_t = unsafe { MaybeUninit::zeroed().assume_init() };
         params.field_mask = UCP_PARAM_FIELD_FEATURES.into();
-        params.features = UCP_FEATURE_AM.into();
+        params.features = UCP_FEATURE_TAG.into();
     
         let status = unsafe {
             rust_ucp_init(&params, std::ptr::null(), context.as_mut_ptr())

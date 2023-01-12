@@ -32,6 +32,7 @@ pub use ucx2_sys::{
     ucs_status_t,
     ucp_dt_iov_t,
     ucp_ep_h,
+    rust_ucp_dt_make_contig,
 };
 mod defaults;
 pub use defaults::{

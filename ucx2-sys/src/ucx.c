@@ -24,3 +24,8 @@ ucs_status_t rust_ucs_ptr_status(const void *ptr)
 {
     return UCS_PTR_STATUS(ptr);
 }
+
+size_t rust_ucp_dt_make_contig(size_t sz)
+{
+    return ucp_dt_make_contig(sz);
+}

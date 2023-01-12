@@ -5,6 +5,7 @@ use ucx2_sys::{
     ucp_request_check_status,
     ucp_request_free,
     ucp_tag_t,
+    ucs_status_t,
     UCS_OK,
     ucp_tag_send_nbx,
     ucp_tag_recv_nbx,
@@ -20,6 +21,7 @@ use ucx2_sys::{
 use std::mem::MaybeUninit;
 use std::os::raw::c_void;
 use super::{Worker, Request, RequestParam, EndpointParams};
+use crate::status_to_string;
 
 pub struct Endpoint<'a> {
     ep: ucp_ep_h,
@@ -67,7 +69,8 @@ impl<'a> Endpoint<'a> {
         tag: ucp_tag_t,
         param: RequestParam,
     ) -> Result<Request<'b>, ()> {
-        assert_eq!(param.as_ref().datatype, UCP_DATATYPE_CONTIG.into());
+        // TODO: Is there a way to check for a CONTIGUOUS-like datatype?
+        // assert_eq!(param.as_ref().datatype, UCP_DATATYPE_CONTIG.into());
         let req_ptr = ucp_tag_send_nbx(self.ep, buf.as_ptr() as *const _,
                                        buf.len() * std::mem::size_of::<u8>(),
                                        tag, param.as_ref());
@@ -94,12 +97,12 @@ impl<'a> Endpoint<'a> {
     }
 
     /// Close the endpoint.
-    pub unsafe fn close(self, worker: Worker, flags: u32) {
+    pub unsafe fn close(self, worker: Worker, flags: u32) -> ucs_status_t {
         let param = RequestParam::default()
             .op_attr_mask(UCP_OP_ATTR_FIELD_FLAGS)
             .flags(flags);
         let close_req = ucp_ep_close_nbx(self.ep, param.as_ref());
-        let status = if rust_ucs_ptr_is_ptr(close_req) != 0 {
+        if rust_ucs_ptr_is_ptr(close_req) != 0 {
             let mut status = UCS_OK;
             loop {
                 println!("Progress...");
@@ -114,10 +117,6 @@ impl<'a> Endpoint<'a> {
         } else {
             println!("Not a pointer...");
             rust_ucs_ptr_status(close_req)
-        };
-
-        if status != UCS_OK {
-            panic!("Failed to close endpoint");
         }
     }
 }

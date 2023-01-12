@@ -5,6 +5,7 @@ use ucp::{
     RequestParam,
     Context,
     Worker,
+    Request,
     Listener,
     Endpoint,
     ConnRequest,
@@ -12,6 +13,7 @@ use ucp::{
     ucp_ep_h,
     ucp_dt_iov_t,
     status_to_string,
+    rust_ucp_dt_make_contig,
 };
 use ucp::consts::{
     UCP_WORKER_PARAM_FIELD_THREAD_MODE,
@@ -45,9 +47,67 @@ use std::os::raw::c_void;
 use nix::sys::socket::SockaddrIn;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::{thread, time};
 
 struct ListenerContext {
     request: Option<ConnRequest>,
+}
+
+/// Wait for the request to complete and then get the status
+unsafe fn request_wait<F>(complete: F, worker: Worker, request: Request<'_>) -> ucs_status_t
+where
+    F: Fn() -> bool,
+{
+    while !complete() {
+        worker.progress();
+    }
+    let status = request.status();
+    request.free();
+    status
+}
+
+/// Send or receive a message and wait until completion.
+unsafe fn send_recv(worker: Worker, endpoint: &Endpoint, recv: bool) -> ucs_status_t {
+    let mut buf = [0; COUNT];
+    let complete = Rc::new(RefCell::new(false));
+    let datatype_id = rust_ucp_dt_make_contig(buf.len());
+    // TODO: Something is wrong with the callback lifetimes here
+    if recv {
+        let param = RequestParam::default()
+            .op_attr_mask(UCP_OP_ATTR_FIELD_CALLBACK
+                          // IMPORTANT
+                          | UCP_OP_ATTR_FIELD_USER_DATA
+                          | UCP_OP_ATTR_FIELD_DATATYPE)
+            .datatype(datatype_id.try_into().unwrap())
+            .cb_recv(|_, _, _| {
+                println!("Recv complete");
+                *complete.borrow_mut() = true;
+            });
+        let req = endpoint
+            .tag_recv_nbx(worker, &mut buf, TAG, param)
+            .expect("Failed to get recv request");
+
+        request_wait(|| *complete.borrow(), worker, req)
+    } else {
+        let param = RequestParam::default()
+            .op_attr_mask(UCP_OP_ATTR_FIELD_CALLBACK
+                          // IMPORTANT
+                          | UCP_OP_ATTR_FIELD_USER_DATA
+                          | UCP_OP_ATTR_FIELD_DATATYPE)
+            .datatype(datatype_id.try_into().unwrap())
+            .cb_send(|_, status| {
+                println!("Send complete");
+                *complete.borrow_mut() = true;
+                if status != UCS_OK {
+                    println!("Bad status in send callback: {}", status_to_string(status));
+                }
+            });
+        let req = endpoint
+            .tag_send_nbx(&buf, TAG, param)
+            .expect("Failed to get send request");
+
+        request_wait(|| *complete.borrow(), worker, req)
+    }
 }
 
 fn server(context: Context, worker: Worker, listen_addr: SockaddrIn) {
@@ -55,13 +115,6 @@ fn server(context: Context, worker: Worker, listen_addr: SockaddrIn) {
         .field_mask(UCP_WORKER_PARAM_FIELD_THREAD_MODE.into())
         .thread_mode(UCS_THREAD_MODE_SINGLE);
     let data_worker = Worker::new(context, &wparams);
-    // Register an AM handler
-    unsafe {
-        data_worker.register_am_handler(|len| {
-            println!("Receiving message of len: {}", len);
-            UCS_OK
-        });
-    }
 
     let listen_ctx = Rc::new(RefCell::new(ListenerContext { request: None }));
     let lparams = ListenerParams::default()
@@ -103,30 +156,17 @@ fn server(context: Context, worker: Worker, listen_addr: SockaddrIn) {
         let data_ep = Endpoint::new(data_worker, ep_params);
         println!("created endpoint for connection");
 
-        let complete = Rc::new(RefCell::new(false));
-        let mut buf = [0; COUNT];
-        let param = RequestParam::default()
-            .cb_recv(|_req, _status, _tag_info| {
-                *complete.borrow_mut() = true;
-                println!("Receiving message");
-            });
         unsafe {
-            let req = data_ep.tag_recv_nbx(worker, &mut buf, TAG, param)
-                .expect("Failed to create request for server-client communication");
-            println!("after tag_recv_nbx() call");
-            let mut i = 0;
-            while !*complete.borrow() {
-                if (i % 1000000) == 0 {
-                    println!("Called data_worker.progress() {} times", i);
-                }
-                data_worker.progress();
-                i += 1;
+            // First message
+            let status = send_recv(data_worker, &data_ep, true);
+            if status != UCS_OK {
+                println!("Got bad status: {}", status_to_string(status));
             }
-            println!("Request complete");
-            let status = req.status();
-            req.free();
-
-            println!("Request completed, status: {}", status_to_string(status));
+            // Second message in reverse direction
+            let status = send_recv(data_worker, &data_ep, false);
+            if status != UCS_OK {
+                println!("Got bad status: {}", status_to_string(status));
+            }
 
             // Wait for the client to close the connection
             while !*closed.borrow() {
@@ -140,7 +180,7 @@ fn server(context: Context, worker: Worker, listen_addr: SockaddrIn) {
 
 const PORT: u16 = 5678;
 const TAG: u64 = 100;
-const COUNT: usize = 128;
+const COUNT: usize = 1;
 
 /// Create and return the client endpoint
 fn create_client_endpoint<'a>(
@@ -177,41 +217,15 @@ fn client(context: Context, worker: Worker, server_addr: &str) {
     let server_addr = addr_to_sa_in(server_addr, PORT);
     let ep = create_client_endpoint(context, worker, &server_addr);
 
-    // Shared boolean indicating whether a request has completed or not
-    let complete = Rc::new(RefCell::new(false));
-
     // Allocate the buffer
 
-    let buf = vec![0; COUNT];
-    let param = RequestParam::default()
-        .op_attr_mask(UCP_OP_ATTR_FIELD_CALLBACK
-                      | UCP_OP_ATTR_FIELD_DATATYPE
-                      | UCP_OP_ATTR_FIELD_USER_DATA)
-        .cb_send(|_, status| {
-            if status != UCS_OK {
-                eprintln!("bad request sent");
-            }
-            println!("in client send handler");
-            let complete = Rc::clone(&complete);
-            *complete.borrow_mut() = true;
-        })
-        .datatype(UCP_DATATYPE_CONTIG.into())
-        .memory_type(UCS_MEMORY_TYPE_HOST.into());
-
-    let status = unsafe {
-        let req = ep.tag_send_nbx(&buf, TAG, param).expect("tag_send_nbx() failed");
-        println!("Sent request");
-
-        // Wait for the request to complete
-        while !*complete.borrow() {
-            println!("worker.progress()");
-            worker.progress();
-        }
-        println!("Request is finished");
-        let status = req.status();
-        req.free();
-        status
-    };
+    // First send message
+    let status = unsafe { send_recv(worker, &ep, false) };
+    if status != UCS_OK {
+        println!("status: {}", status_to_string(status));
+    }
+    // Second message is a receive
+    let status = unsafe { send_recv(worker, &ep, true) };
     if status != UCS_OK {
         println!("status: {}", status_to_string(status));
     }
@@ -236,8 +250,8 @@ fn main() {
         .thread_mode(UCS_THREAD_MODE_SINGLE);
     let worker = Worker::new(context, &wparams);
 
-    if server_addr.is_some() {
-        client(context, worker, &server_addr.unwrap());
+    if let Some(server_addr) = server_addr {
+        client(context, worker, &server_addr);
     } else {
         server(context, worker, listen_addr);
     }

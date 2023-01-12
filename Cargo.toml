@@ -3,4 +3,5 @@ members = [
     "ucx2-sys",
     "ucp",
     "ucp-client-server",
+    "ucp-client-server2",
 ]
