@@ -3,16 +3,18 @@ use ucx2_sys::{
     UCS_OK,
     ucp_listener_create,
 };
+use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use super::{Worker, ListenerParams};
 
+#[repr(transparent)]
 pub struct Listener<'a> {
     listener: ucp_listener_h,
-    params: ListenerParams<'a>,
+    _phantom_data: PhantomData<&'a ()>,
 }
 
 impl<'a> Listener<'a> {
-    pub fn new(worker: Worker, params: ListenerParams<'a>) -> Listener {
+    pub fn new(worker: Worker, params: &ListenerParams<'a>) -> Listener<'a> {
         unsafe {
             let mut listener = MaybeUninit::<ucp_listener_h>::uninit();
             let status = ucp_listener_create(worker.into_raw(), params.as_ref(),
@@ -24,7 +26,7 @@ impl<'a> Listener<'a> {
             // TODO: query listening port
             Listener {
                 listener,
-                params,
+                _phantom_data: PhantomData,
             }
         }
     }

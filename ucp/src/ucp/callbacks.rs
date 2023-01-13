@@ -7,6 +7,7 @@ use ucx2_sys::{
     ucp_ep_h,
     ucp_conn_request_h,
 };
+use crate::Status;
 use super::{
     Endpoint,
     Request,
@@ -21,9 +22,9 @@ pub unsafe extern "C" fn send_nbx_callback(
     status: ucs_status_t,
     user_data: *mut c_void,
 ) {
-    let req = Request::new();
-    let cb = user_data as *mut Box<dyn Fn(Request, ucs_status_t)>;
-    (*cb)(req, status);
+    let req = Request::from_raw(request);
+    let cb = user_data as *mut Box<dyn Fn(Request, Status)>;
+    (*cb)(req, Status::from_raw(status));
 }
 
 /// Wrapper around ucp_tag_recv_nbx_callback_t.
@@ -33,11 +34,11 @@ pub unsafe extern "C" fn tag_recv_nbx_callback(
     tag_info: *const ucp_tag_recv_info_t,
     user_data: *mut c_void,
 ) {
-    let req = Request::new();
+    let req = Request::from_raw(request);
     let cb = user_data as *mut Box<
-        dyn Fn(Request, ucs_status_t, *const ucp_tag_recv_info_t)
+        dyn Fn(Request, Status, *const ucp_tag_recv_info_t)
     >;
-    (*cb)(req, status, tag_info);
+    (*cb)(req, Status::from_raw(status), tag_info);
 }
 
 /// Wrapper around both ucp_stream_recv_nbx_callback_t and
@@ -48,9 +49,9 @@ pub unsafe extern "C" fn stream_and_am_recv_nbx_callback(
     length: usize,
     user_data: *mut c_void,
 ) {
-    let req = Request::new();
-    let cb = user_data as *mut Box<dyn Fn(Request, ucs_status_t, usize)>;
-    (*cb)(req, status, length);
+    let req = Request::from_raw(request);
+    let cb = user_data as *mut Box<dyn Fn(Request, Status, usize)>;
+    (*cb)(req, Status::from_raw(status), length);
 }
 
 /// Callback for ucp_listener_accept_callback_t.
@@ -77,6 +78,6 @@ pub unsafe extern "C" fn err_handler_cb(
     ep: ucp_ep_h,
     status: ucs_status_t,
 ) {
-    let cb = arg as *mut Box<dyn Fn(Endpoint, ucs_status_t)>;
-    (*cb)(Endpoint::from_raw(ep), status);
+    let cb = arg as *mut Box<dyn Fn(Endpoint, Status)>;
+    (*cb)(Endpoint::from_raw(ep), Status::from_raw(status));
 }

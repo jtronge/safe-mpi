@@ -12,7 +12,14 @@ use ucx2_sys::{
     UCP_AM_HANDLER_PARAM_FIELD_ARG,
 };
 use std::mem::MaybeUninit;
-use super::{Context, WorkerParams};
+use super::{
+    Context,
+    WorkerParams,
+};
+use crate::{
+    ucs,
+    Status,
+};
 use std::os::raw::c_void;
 
 #[repr(transparent)]
@@ -20,16 +27,17 @@ use std::os::raw::c_void;
 pub struct Worker(ucp_worker_h);
 
 impl Worker {
-    pub fn new(context: Context, params: &WorkerParams) -> Worker {
+    pub fn new(context: Context, params: &WorkerParams) -> ucs::Result<Worker> {
         unsafe {
             let mut worker = MaybeUninit::<ucp_worker_h>::uninit();
             let status = ucp_worker_create(context.into_raw(), params.as_ref(),
                                            worker.as_mut_ptr());
             if status != UCS_OK {
-                panic!("ucp_worker_create() failed");
+                Err(Status::from_raw(status))
+            } else {
+                let worker = worker.assume_init();
+                Ok(Worker(worker))
             }
-            let worker = worker.assume_init();
-            Worker(worker)
         }
     }
 

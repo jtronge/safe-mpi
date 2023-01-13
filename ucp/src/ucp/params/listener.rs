@@ -11,11 +11,11 @@ use ucx2_sys::{
     ucp_listener_conn_handler_t,
     ucp_listener_conn_callback_t,
 };
-use crate::{
+use crate::ucp::{
     Endpoint,
     ConnRequest,
 };
-use crate::callbacks::{
+use crate::ucp::callbacks::{
     listener_accept_callback,
     listener_conn_callback,
 };

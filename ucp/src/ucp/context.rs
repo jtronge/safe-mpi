@@ -3,34 +3,40 @@ use ucx2_sys::{
     ucp_params_t,
     rust_ucp_init,
     UCP_PARAM_FIELD_FEATURES,
-    UCP_FEATURE_AM,
-    UCP_FEATURE_TAG,
+    ucp_feature,
     UCS_OK,
     ucp_cleanup,
 };
 use std::mem::MaybeUninit;
+use crate::{
+    Feature,
+    ucs,
+    Status,
+};
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Context(ucp_context_h);
 
 impl Context {
-    pub fn new() -> Context {
-        // The docs declare this to be UB, but this seems to be how the C API works
-        let mut context = MaybeUninit::<ucp_context_h>::uninit();
+    pub fn new(features: ucp_feature) -> ucs::Result<Context> {
+        unsafe {
+            // The docs declare this to be UB, but this seems to be how the C API works
+            let mut context = MaybeUninit::<ucp_context_h>::uninit();
+
+            let mut params: ucp_params_t = unsafe { MaybeUninit::zeroed().assume_init() };
+            params.field_mask = UCP_PARAM_FIELD_FEATURES.into();
+            // params.features = UCP_FEATURE_TAG.into();
+            params.features = features.into();
     
-        let mut params: ucp_params_t = unsafe { MaybeUninit::zeroed().assume_init() };
-        params.field_mask = UCP_PARAM_FIELD_FEATURES.into();
-        params.features = UCP_FEATURE_TAG.into();
-    
-        let status = unsafe {
-            rust_ucp_init(&params, std::ptr::null(), context.as_mut_ptr())
-        };
-        if status != UCS_OK {
-            panic!("ucp_init() failed");
+            let status = rust_ucp_init(&params, std::ptr::null(),
+                                       context.as_mut_ptr());
+            if status != UCS_OK {
+                return Err(Status::from_raw(status));
+            }
+            let context = context.assume_init();
+            Ok(Context(context))
         }
-        let context = unsafe { context.assume_init() };
-        Context(context)
     }
 
     #[inline]

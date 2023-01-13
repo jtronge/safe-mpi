@@ -5,6 +5,15 @@ use ucx2_sys::{
     ucs_thread_mode_t,
     UCS_THREAD_MODE_SINGLE,
     ucs_cpu_set_t,
+    UCP_WORKER_PARAM_FIELD_THREAD_MODE,
+    UCP_WORKER_PARAM_FIELD_CPU_MASK,
+    UCP_WORKER_PARAM_FIELD_EVENTS,
+    UCP_WORKER_PARAM_FIELD_USER_DATA,
+    UCP_WORKER_PARAM_FIELD_EVENT_FD,
+    UCP_WORKER_PARAM_FIELD_FLAGS,
+    UCP_WORKER_PARAM_FIELD_NAME,
+    UCP_WORKER_PARAM_FIELD_AM_ALIGNMENT,
+    UCP_WORKER_PARAM_FIELD_CLIENT_ID,
 };
 use super::InternalDefault;
 use std::os::raw::{
@@ -37,62 +46,73 @@ impl Default for WorkerParams {
 }
 
 impl WorkerParams {
+/*
     #[inline]
     pub fn field_mask(mut self, field_mask: u64) -> Self {
         self.inner.field_mask = field_mask;
         self
     }
+*/
 
     #[inline]
     pub fn thread_mode(mut self, thread_mode: ucs_thread_mode_t) -> Self {
+        self.inner.field_mask |= UCP_WORKER_PARAM_FIELD_THREAD_MODE as u64;
         self.inner.thread_mode = thread_mode;
         self
     }
 
     #[inline]
     pub fn cpu_mask(mut self, cpu_mask: ucs_cpu_set_t) -> Self {
+        self.inner.field_mask |= UCP_WORKER_PARAM_FIELD_CPU_MASK as u64;
         self.inner.cpu_mask = cpu_mask;
         self
     }
 
     #[inline]
     pub fn events(mut self, events: c_uint) -> Self {
+        self.inner.field_mask |= UCP_WORKER_PARAM_FIELD_EVENTS as u64;
         self.inner.events = events;
         self
     }
 
     #[inline]
     pub fn user_data(mut self, user_data: *mut c_void) -> Self {
+        self.inner.field_mask |= UCP_WORKER_PARAM_FIELD_USER_DATA as u64;
         self.inner.user_data = user_data;
         self
     }
 
     #[inline]
     pub fn event_fd(mut self, event_fd: c_int) -> Self {
+        self.inner.field_mask |= UCP_WORKER_PARAM_FIELD_EVENT_FD as u64;
         self.inner.event_fd = event_fd;
         self
     }
 
     #[inline]
     pub fn flags(mut self, flags: u64) -> Self {
+        self.inner.field_mask |= UCP_WORKER_PARAM_FIELD_FLAGS as u64;
         self.inner.flags = flags;
         self
     }
 
     #[inline]
     pub fn name(mut self, name: *const c_char) -> Self {
+        self.inner.field_mask |= UCP_WORKER_PARAM_FIELD_NAME as u64;
         self.inner.name = name;
         self
     }
 
     #[inline]
     pub fn am_alignment(mut self, am_alignment: usize) -> Self {
+        self.inner.field_mask |= UCP_WORKER_PARAM_FIELD_AM_ALIGNMENT as u64;
         self.inner.am_alignment = am_alignment;
         self
     }
 
     #[inline]
     pub fn client_id(mut self, client_id: u64) -> Self {
+        self.inner.field_mask |= UCP_WORKER_PARAM_FIELD_CLIENT_ID as u64;
         self.inner.client_id = client_id;
         self
     }

@@ -14,14 +14,23 @@ use ucx2_sys::{
     ucp_am_recv_data_nbx_callback_t,
     ucs_status_t,
     UCS_OK,
+    UCP_OP_ATTR_FIELD_REQUEST,
+    UCP_OP_ATTR_FIELD_CALLBACK,
+    UCP_OP_ATTR_FIELD_USER_DATA,
+    UCP_OP_ATTR_FIELD_DATATYPE,
+    UCP_OP_ATTR_FIELD_FLAGS,
+    UCP_OP_ATTR_FIELD_REPLY_BUFFER,
+    UCP_OP_ATTR_FIELD_MEMORY_TYPE,
+    UCP_OP_ATTR_FIELD_RECV_INFO,
 };
-use super::InternalDefault;
-use crate::callbacks::{
+use crate::Status;
+use crate::ucp::Request;
+use crate::ucp::callbacks::{
     send_nbx_callback,
     tag_recv_nbx_callback,
     stream_and_am_recv_nbx_callback,
 };
-use crate::Request;
+use super::InternalDefault;
 
 #[derive(Copy, Clone)]
 enum CallbackType {
@@ -56,13 +65,8 @@ impl Default for RequestParam {
 
 impl RequestParam {
     #[inline]
-    pub fn op_attr_mask(mut self, op_attr_mask: u32) -> Self {
-        self.inner.op_attr_mask = op_attr_mask;
-        self
-    }
-
-    #[inline]
     pub fn flags(mut self, flags: u32) -> Self {
+        self.inner.op_attr_mask |= UCP_OP_ATTR_FIELD_FLAGS;
         self.inner.flags = flags;
         self
     }
@@ -71,9 +75,11 @@ impl RequestParam {
     #[inline]
     pub fn cb_send<F>(mut self, f: F) -> Self
     where
-        F: Fn(Request, ucs_status_t),
+        F: Fn(Request, Status),
     {
-        let f: Box<dyn Fn(Request, ucs_status_t)> = Box::new(f);
+        self.inner.op_attr_mask |= UCP_OP_ATTR_FIELD_CALLBACK
+                                   | UCP_OP_ATTR_FIELD_USER_DATA;
+        let f: Box<dyn Fn(Request, Status)> = Box::new(f);
         self.inner.user_data = Box::into_raw(Box::new(f)) as *mut _;
         self.inner.cb.send = Some(send_nbx_callback);
         self.callback_type.insert(CallbackType::Send);
@@ -83,10 +89,12 @@ impl RequestParam {
     #[inline]
     pub fn cb_recv<F>(mut self, f: F) -> Self
     where
-        F: Fn(Request, ucs_status_t, *const ucp_tag_recv_info_t),
+        F: Fn(Request, Status, *const ucp_tag_recv_info_t),
     {
+        self.inner.op_attr_mask |= UCP_OP_ATTR_FIELD_CALLBACK
+                                   | UCP_OP_ATTR_FIELD_USER_DATA;
         let f: Box<
-            dyn Fn(Request, ucs_status_t, *const ucp_tag_recv_info_t)
+            dyn Fn(Request, Status, *const ucp_tag_recv_info_t)
         > = Box::new(f);
         self.inner.user_data = Box::into_raw(Box::new(f)) as *mut _;
         self.inner.cb.recv = Some(tag_recv_nbx_callback);
@@ -97,9 +105,11 @@ impl RequestParam {
     #[inline]
     pub fn cb_recv_stream<F>(mut self, f: F) -> Self
     where
-        F: Fn(Request, ucs_status_t, usize),
+        F: Fn(Request, Status, usize),
     {
-        let f: Box<dyn Fn(Request, ucs_status_t, usize)> = Box::new(f);
+        self.inner.op_attr_mask |= UCP_OP_ATTR_FIELD_CALLBACK
+                                   | UCP_OP_ATTR_FIELD_USER_DATA;
+        let f: Box<dyn Fn(Request, Status, usize)> = Box::new(f);
         self.inner.user_data = Box::into_raw(Box::new(f)) as *mut _;
         self.inner.cb.recv_stream = Some(stream_and_am_recv_nbx_callback);
         self.callback_type.insert(CallbackType::RecvStream);
@@ -109,9 +119,11 @@ impl RequestParam {
     #[inline]
     pub fn cb_recv_am<F>(mut self, f: F) -> Self
     where
-        F: Fn(Request, ucs_status_t, usize),
+        F: Fn(Request, Status, usize),
     {
-        let f: Box<dyn Fn(Request, ucs_status_t, usize)> = Box::new(f);
+        self.inner.op_attr_mask |= UCP_OP_ATTR_FIELD_CALLBACK
+                                   | UCP_OP_ATTR_FIELD_USER_DATA;
+        let f: Box<dyn Fn(Request, Status, usize)> = Box::new(f);
         self.inner.user_data = Box::into_raw(Box::new(f)) as *mut _;
         self.inner.cb.recv_am = Some(stream_and_am_recv_nbx_callback);
         self.callback_type.insert(CallbackType::RecvAM);
@@ -120,12 +132,14 @@ impl RequestParam {
 
     #[inline]
     pub fn datatype(mut self, datatype: ucp_datatype_t) -> Self {
+        self.inner.op_attr_mask |= UCP_OP_ATTR_FIELD_DATATYPE;
         self.inner.datatype = datatype;
         self
     }
 
     #[inline]
     pub fn memory_type(mut self, memory_type: ucs_memory_type_t) -> Self {
+        self.inner.op_attr_mask |= UCP_OP_ATTR_FIELD_MEMORY_TYPE;
         self.inner.memory_type = memory_type;
         self
     }
