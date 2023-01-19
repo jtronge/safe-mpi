@@ -2,7 +2,6 @@ use ucx2_sys::{
     ucs_sock_addr_t,
     ucs_cpu_set_t,
     ucp_err_handler_t,
-    UCS_MEMORY_TYPE_HOST,
 };
 mod listener;
 pub use listener::ListenerParams;

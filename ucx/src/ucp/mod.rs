@@ -30,7 +30,14 @@ use ucx2_sys::{
     ucp_err_handling_mode_t,
     UCP_ERR_HANDLING_MODE_NONE,
     UCP_ERR_HANDLING_MODE_PEER,
+    rust_ucp_dt_make_contig,
 };
+
+pub fn make_contig(size: usize) -> usize {
+    unsafe {
+        rust_ucp_dt_make_contig(size)
+    }
+}
 
 pub struct EPCloseMode;
 

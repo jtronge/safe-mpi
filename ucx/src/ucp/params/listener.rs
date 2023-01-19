@@ -1,15 +1,15 @@
 use std::convert::AsRef;
 use std::default::Default;
 use std::marker::PhantomData;
-use std::os::raw::c_void;
 use nix::sys::socket::SockaddrLike;
 use ucx2_sys::{
     ucp_listener_params_t,
     ucs_sock_addr_t,
     ucp_listener_accept_handler_t,
-    ucp_listener_accept_callback_t,
     ucp_listener_conn_handler_t,
-    ucp_listener_conn_callback_t,
+    UCP_LISTENER_PARAM_FIELD_SOCK_ADDR,
+    UCP_LISTENER_PARAM_FIELD_ACCEPT_HANDLER,
+    UCP_LISTENER_PARAM_FIELD_CONN_HANDLER,
 };
 use crate::ucp::{
     Endpoint,
@@ -47,16 +47,11 @@ impl<'a> Default for ListenerParams<'a> {
 
 impl<'a> ListenerParams<'a> {
     #[inline]
-    pub fn field_mask(mut self, field_mask: u64) -> Self {
-        self.inner.field_mask = field_mask;
-        self
-    }
-
-    #[inline]
     pub fn sockaddr<S>(mut self, addr: &'a S) -> Self
     where
         S: SockaddrLike,
     {
+        self.inner.field_mask |= UCP_LISTENER_PARAM_FIELD_SOCK_ADDR as u64;
         self.inner.sockaddr.addr = addr.as_ptr() as *const _;
         self.inner.sockaddr.addrlen = addr.len();
         self
@@ -71,6 +66,7 @@ impl<'a> ListenerParams<'a> {
     where
         F: Fn(Endpoint),
     {
+        self.inner.field_mask |= UCP_LISTENER_PARAM_FIELD_ACCEPT_HANDLER as u64;
         let f: Box<dyn Fn(Endpoint)> = Box::new(f);
         let arg = Box::into_raw(Box::new(f));
         self.inner.accept_handler.cb = Some(listener_accept_callback);
@@ -86,6 +82,7 @@ impl<'a> ListenerParams<'a> {
     where
         F: Fn(ConnRequest),
     {
+        self.inner.field_mask |= UCP_LISTENER_PARAM_FIELD_CONN_HANDLER as u64;
         let f: Box<dyn Fn(ConnRequest)> = Box::new(f);
         let arg = Box::into_raw(Box::new(f));
         self.inner.conn_handler.cb = Some(listener_conn_callback);

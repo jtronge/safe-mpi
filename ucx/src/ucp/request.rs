@@ -1,9 +1,7 @@
 use ucx2_sys::{
     ucp_request_check_status,
     ucp_request_free,
-    ucs_status_t,
 };
-use super::RequestParam;
 use crate::Status;
 use std::marker::PhantomData;
 use std::os::raw::c_void;

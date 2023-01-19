@@ -249,27 +249,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "ucp"
-version = "0.1.0"
-dependencies = [
- "nix",
- "ucx2-sys",
-]
-
-[[package]]
 name = "ucp-client-server"
 version = "0.1.0"
 dependencies = [
  "nix",
- "ucp",
+ "ucx",
 ]
 
 [[package]]
-name = "ucp-client-server2"
+name = "ucx"
 version = "0.1.0"
 dependencies = [
  "nix",
- "ucp",
+ "ucx2-sys",
 ]
 
 [[package]]

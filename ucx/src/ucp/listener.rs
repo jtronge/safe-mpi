@@ -9,7 +9,7 @@ use super::{Worker, ListenerParams};
 
 #[repr(transparent)]
 pub struct Listener<'a> {
-    listener: ucp_listener_h,
+    _listener: ucp_listener_h,
     _phantom_data: PhantomData<&'a ()>,
 }
 
@@ -22,10 +22,10 @@ impl<'a> Listener<'a> {
             if status != UCS_OK {
                 panic!("ucp_listener_create() failed");
             }
-            let listener = listener.assume_init();
+            let _listener = listener.assume_init();
             // TODO: query listening port
             Listener {
-                listener,
+                _listener,
                 _phantom_data: PhantomData,
             }
         }

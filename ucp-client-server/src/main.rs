@@ -1,15 +1,9 @@
-use ucp::ucs;
-use ucp::{
+use ucx::{
     Feature,
-    rust_ucp_dt_make_contig,
-    UCP_ERR_HANDLING_MODE_PEER,
-    UCP_DATATYPE_IOV,
-    UCS_MEMORY_TYPE_HOST,
-    UCP_LISTENER_PARAM_FIELD_SOCK_ADDR,
-    UCP_LISTENER_PARAM_FIELD_CONN_HANDLER,
     Status,
 };
-use ucp::ucp::{
+use ucx::ucs;
+use ucx::ucp::{
     ListenerParams,
     WorkerParams,
     EndpointParams,
@@ -23,6 +17,7 @@ use ucp::ucp::{
     EPCloseMode,
     EPParamsFlags,
     ErrHandlingMode,
+    make_contig,
 };
 use std::env;
 use std::str::FromStr;
@@ -52,7 +47,7 @@ where
 unsafe fn send_recv(worker: Worker, endpoint: &Endpoint, recv: bool) -> Status {
     let mut buf = [0; COUNT];
     let complete = Rc::new(RefCell::new(false));
-    let datatype_id = rust_ucp_dt_make_contig(buf.len());
+    let datatype_id = make_contig(buf.len());
     // TODO: Something is wrong with the callback lifetimes here
     if recv {
         let param = RequestParam::default()
@@ -86,7 +81,6 @@ unsafe fn send_recv(worker: Worker, endpoint: &Endpoint, recv: bool) -> Status {
 
 fn server(context: Context, worker: Worker, listen_addr: SockaddrIn) {
     let wparams = WorkerParams::default()
-        // .field_mask(UCP_WORKER_PARAM_FIELD_THREAD_MODE.into())
         .thread_mode(ucs::ThreadMode::SINGLE);
     let data_worker = Worker::new(context, &wparams).expect("Failed to create data worker");
 
@@ -97,8 +91,6 @@ fn server(context: Context, worker: Worker, listen_addr: SockaddrIn) {
             let listen_ctx = Rc::clone(&listen_ctx);
             let _ = listen_ctx.borrow_mut().request.insert(conn_req);
         })
-        .field_mask((UCP_LISTENER_PARAM_FIELD_SOCK_ADDR
-                     | UCP_LISTENER_PARAM_FIELD_CONN_HANDLER).into())
         .sockaddr(&listen_addr);
     // Create a listener on the first worker
     let listener = Listener::new(worker, &lparams);

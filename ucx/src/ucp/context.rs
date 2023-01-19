@@ -9,7 +9,6 @@ use ucx2_sys::{
 };
 use std::mem::MaybeUninit;
 use crate::{
-    Feature,
     ucs,
     Status,
 };
@@ -24,7 +23,7 @@ impl Context {
             // The docs declare this to be UB, but this seems to be how the C API works
             let mut context = MaybeUninit::<ucp_context_h>::uninit();
 
-            let mut params: ucp_params_t = unsafe { MaybeUninit::zeroed().assume_init() };
+            let mut params: ucp_params_t = MaybeUninit::zeroed().assume_init();
             params.field_mask = UCP_PARAM_FIELD_FEATURES.into();
             // params.features = UCP_FEATURE_TAG.into();
             params.features = features.into();

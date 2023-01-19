@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "ucx2-sys",
-    "ucp",
+    "ucx",
     "ucp-client-server",
-    "ucp-client-server2",
 ]

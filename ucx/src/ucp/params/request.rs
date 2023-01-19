@@ -7,21 +7,16 @@ use ucx2_sys::{
     ucs_memory_type_t,
     ucp_request_param_t__bindgen_ty_1,
     ucp_request_param_t__bindgen_ty_2,
-    ucp_send_nbx_callback_t,
-    ucp_tag_recv_nbx_callback_t,
     ucp_tag_recv_info_t,
-    ucp_stream_recv_nbx_callback_t,
-    ucp_am_recv_data_nbx_callback_t,
     ucs_status_t,
-    UCS_OK,
-    UCP_OP_ATTR_FIELD_REQUEST,
+    // UCP_OP_ATTR_FIELD_REQUEST,
     UCP_OP_ATTR_FIELD_CALLBACK,
     UCP_OP_ATTR_FIELD_USER_DATA,
     UCP_OP_ATTR_FIELD_DATATYPE,
     UCP_OP_ATTR_FIELD_FLAGS,
-    UCP_OP_ATTR_FIELD_REPLY_BUFFER,
+    // UCP_OP_ATTR_FIELD_REPLY_BUFFER,
     UCP_OP_ATTR_FIELD_MEMORY_TYPE,
-    UCP_OP_ATTR_FIELD_RECV_INFO,
+    // UCP_OP_ATTR_FIELD_RECV_INFO,
 };
 use crate::Status;
 use crate::ucp::Request;
@@ -82,7 +77,7 @@ impl RequestParam {
         let f: Box<dyn Fn(Request, Status)> = Box::new(f);
         self.inner.user_data = Box::into_raw(Box::new(f)) as *mut _;
         self.inner.cb.send = Some(send_nbx_callback);
-        self.callback_type.insert(CallbackType::Send);
+        let _ = self.callback_type.insert(CallbackType::Send);
         self
     }
 
@@ -98,7 +93,7 @@ impl RequestParam {
         > = Box::new(f);
         self.inner.user_data = Box::into_raw(Box::new(f)) as *mut _;
         self.inner.cb.recv = Some(tag_recv_nbx_callback);
-        self.callback_type.insert(CallbackType::Recv);
+        let _ = self.callback_type.insert(CallbackType::Recv);
         self
     }
 
@@ -112,7 +107,7 @@ impl RequestParam {
         let f: Box<dyn Fn(Request, Status, usize)> = Box::new(f);
         self.inner.user_data = Box::into_raw(Box::new(f)) as *mut _;
         self.inner.cb.recv_stream = Some(stream_and_am_recv_nbx_callback);
-        self.callback_type.insert(CallbackType::RecvStream);
+        let _ = self.callback_type.insert(CallbackType::RecvStream);
         self
     }
 
@@ -126,7 +121,7 @@ impl RequestParam {
         let f: Box<dyn Fn(Request, Status, usize)> = Box::new(f);
         self.inner.user_data = Box::into_raw(Box::new(f)) as *mut _;
         self.inner.cb.recv_am = Some(stream_and_am_recv_nbx_callback);
-        self.callback_type.insert(CallbackType::RecvAM);
+        let _ = self.callback_type.insert(CallbackType::RecvAM);
         self
     }
 
