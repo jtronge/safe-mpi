@@ -8,6 +8,8 @@ pub struct Feature;
 
 impl Feature {
     pub const TAG: ucp_feature = UCP_FEATURE_TAG;
+    pub const STREAM: ucp_feature = UCP_FEATURE_STREAM;
 }
 
 pub mod ucs;
+pub use ucs::Result;

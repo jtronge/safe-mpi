@@ -13,6 +13,7 @@ use ucx::ucp::{
     Request,
     Listener,
     Endpoint,
+    StreamRecvResult,
     ConnRequest,
     EPCloseMode,
     EPParamsFlags,
@@ -52,15 +53,21 @@ unsafe fn send_recv(worker: Worker, endpoint: &Endpoint, recv: bool) -> Status {
     if recv {
         let param = RequestParam::default()
             .datatype(datatype_id.try_into().unwrap())
-            .cb_recv(|_, _, _| {
-                println!("Recv complete");
+            .cb_recv_stream(|_, _, len| {
+                println!("Stream receive of length: {}", len);
                 *complete.borrow_mut() = true;
             });
         let req = endpoint
-            .tag_recv_nbx(worker, &mut buf, TAG, &param)
+            // .tag_recv_nbx(worker, &mut buf, TAG, &param)
+            .stream_recv_nbx(&mut buf, &param)
             .expect("Failed to get recv request");
 
-        request_wait(|| *complete.borrow(), worker, req)
+        match req {
+            StreamRecvResult::Running(req) => {
+                request_wait(|| *complete.borrow(), worker, req)
+            }
+            StreamRecvResult::Complete(_) => Status::OK,
+        }
     } else {
         let param = RequestParam::default()
             .datatype(datatype_id.try_into().unwrap())
@@ -72,10 +79,15 @@ unsafe fn send_recv(worker: Worker, endpoint: &Endpoint, recv: bool) -> Status {
                 }
             });
         let req = endpoint
-            .tag_send_nbx(&buf, TAG, &param)
+            // .tag_send_nbx(&buf, TAG, &param)
+            .stream_send_nbx(&buf, &param)
             .expect("Failed to get send request");
 
-        request_wait(|| *complete.borrow(), worker, req)
+        if let Some(req) = req {
+            request_wait(|| *complete.borrow(), worker, req)
+        } else {
+            Status::OK
+        }
     }
 }
 
@@ -200,7 +212,7 @@ fn main() {
 
     let listen_addr = SockaddrIn::new(0, 0, 0, 0, PORT);
 
-    let context = Context::new(Feature::TAG).expect("Failed to create context");
+    let context = Context::new(Feature::TAG | Feature::STREAM).expect("Failed to create context");
     let wparams = WorkerParams::default()
         .thread_mode(ucs::ThreadMode::SINGLE);
     let worker = Worker::new(context, &wparams).expect("Failed to create worker");

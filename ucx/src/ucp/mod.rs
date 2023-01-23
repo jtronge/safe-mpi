@@ -13,7 +13,7 @@ pub use worker::Worker;
 mod listener;
 pub use listener::Listener;
 mod endpoint;
-pub use endpoint::Endpoint;
+pub use endpoint::{Endpoint, StreamRecvResult};
 mod request;
 pub use request::Request;
 mod conn_request;
