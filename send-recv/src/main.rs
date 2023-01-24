@@ -150,6 +150,8 @@ fn server(context: Context, worker: Worker, listen_addr: SockaddrIn) {
             // Wait for request completion
             data_ep.close(data_worker, EPCloseMode::FORCE);
         }
+
+        break;
     }
 }
 
@@ -204,27 +206,91 @@ fn client(context: Context, worker: Worker, server_addr: &str) {
     }
 }
 
+pub enum SafeMPIType {
+    Server(SockaddrIn),
+    Client(String),
+}
+
+struct SafeMPI {
+    context: Context,
+    worker: Worker,
+    ty: SafeMPIType,
+}
+
+impl SafeMPI {
+    fn setup() -> (Context, Worker) {
+        let context = Context::new(Feature::TAG | Feature::STREAM).expect("Failed to create context");
+        let wparams = WorkerParams::default()
+            .thread_mode(ucs::ThreadMode::SINGLE);
+        let worker = Worker::new(context, &wparams).expect("Failed to create worker");
+        (context, worker)
+    }
+
+    fn server(listen_addr: SockaddrIn) -> SafeMPI {
+        let (context, worker) = Self::setup();
+
+        SafeMPI {
+            context,
+            worker,
+            ty: SafeMPIType::Server(listen_addr),
+        }
+    }
+
+    fn client(server_addr: &str) -> SafeMPI {
+        let (context, worker) = Self::setup();
+
+        SafeMPI {
+            context,
+            worker,
+            ty: SafeMPIType::Client(server_addr.to_string()),
+        }
+    }
+
+    fn send(&self, buf: &[u8]) {
+        if let SafeMPIType::Server(listen_addr) = self.ty {
+            server(self.context, self.worker, listen_addr);
+        }
+    }
+
+    fn recv(&self, buf: &mut [u8]) {
+        if let SafeMPIType::Client(server_addr) = &self.ty {
+            client(self.context, self.worker, &server_addr);
+        }
+    }
+}
+
+impl Drop for SafeMPI {
+    fn drop(&mut self) {
+        unsafe {
+            self.worker.destroy();
+            self.context.cleanup();
+        }
+    }
+}
+
 fn main() {
     let mut args = env::args();
     // Skip the bin name
     args.next();
     let server_addr = args.next();
 
-    let listen_addr = SockaddrIn::new(0, 0, 0, 0, PORT);
+    if let Some(server_addr) = server_addr {
+        let buf: Vec<u8> = (0..16).collect();
+        let mpi = SafeMPI::client(&server_addr);
+        mpi.send(&buf);
+    } else {
+        let listen_addr = SockaddrIn::new(0, 0, 0, 0, PORT);
+        let mut buf = [0u8; 16];
+        let mpi = SafeMPI::server(listen_addr);
+        mpi.recv(&mut buf);
+        println!("{:?}", buf);
+    }
 
-    let context = Context::new(Feature::TAG | Feature::STREAM).expect("Failed to create context");
-    let wparams = WorkerParams::default()
-        .thread_mode(ucs::ThreadMode::SINGLE);
-    let worker = Worker::new(context, &wparams).expect("Failed to create worker");
-
+/*
     if let Some(server_addr) = server_addr {
         client(context, worker, &server_addr);
     } else {
         server(context, worker, listen_addr);
     }
-
-    unsafe {
-        worker.destroy();
-        context.cleanup();
-    }
+*/
 }
