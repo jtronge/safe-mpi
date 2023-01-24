@@ -2,6 +2,5 @@
 members = [
     "ucx2-sys",
     "ucx",
-    "ucp-client-server",
     "send-recv",
 ]
