@@ -26,6 +26,7 @@ use std::net::Ipv4Addr;
 use nix::sys::socket::SockaddrIn;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 
 struct ListenerContext {
     request: Option<ConnRequest>,
@@ -206,18 +207,84 @@ fn client(context: Context, worker: Worker, server_addr: &str) {
     }
 }
 
-pub enum SafeMPIType {
-    Server(SockaddrIn),
-    Client(String),
+pub struct Server<'a> {
+    data_worker: Worker,
+    lparams: ListenerParams<'a>,
+    listener: Listener<'a>,
 }
 
-struct SafeMPI {
-    context: Context,
+impl<'a> Server<'a> {
+    fn new(context: Context, worker: Worker, listen_addr: &'a SockaddrIn) -> Server<'a> {
+        let wparams = WorkerParams::default()
+            .thread_mode(ucs::ThreadMode::SINGLE);
+        let data_worker = Worker::new(context, &wparams).expect("Failed to create data worker");
+
+        let listen_ctx = Rc::new(RefCell::new(ListenerContext { request: None }));
+        let lparams = ListenerParams::default()
+            .conn_handler(|conn_req| {
+                println!("Got connection request");
+                let listen_ctx = Rc::clone(&listen_ctx);
+                let _ = listen_ctx.borrow_mut().request.insert(conn_req);
+            })
+            .sockaddr(listen_addr);
+        // Create a listener on the first worker
+        let listener = Listener::new(worker, &lparams);
+
+        Server {
+            data_worker,
+            lparams,
+            listener,
+        }
+    }
+}
+
+impl<'a> Drop for Server<'a> {
+    fn drop(&mut self) {
+        eprintln!("Dropping Server");
+        unsafe {
+            self.data_worker.destroy();
+        }
+    }
+}
+
+pub struct Client<'a> {
+    endpoint: Option<Endpoint<'a>>,
     worker: Worker,
-    ty: SafeMPIType,
 }
 
-impl SafeMPI {
+impl<'a> Client<'a> {
+    fn new(context: Context, worker: Worker, server_addr: &'a SockaddrIn) -> Client<'a> {
+        let endpoint = create_client_endpoint(context, worker, server_addr);
+        Client {
+            endpoint: Some(endpoint),
+            worker,
+        }
+    }
+}
+
+impl<'a> Drop for Client<'a> {
+    fn drop(&mut self) {
+        unsafe {
+            eprintln!("Dropping Client");
+            if let Some(endpoint) = self.endpoint.take() {
+                endpoint.close(self.worker, EPCloseMode::FLUSH);
+            }
+        }
+    }
+}
+
+pub enum SafeMPIType<'a> {
+    Server(Server<'a>),
+    Client(Client<'a>),
+}
+
+struct SafeMPI<'a> {
+    ty: ManuallyDrop<SafeMPIType<'a>>,
+    worker: Worker,
+    context: Context,
+}
+
+impl<'a> SafeMPI<'a> {
     fn setup() -> (Context, Worker) {
         let context = Context::new(Feature::TAG | Feature::STREAM).expect("Failed to create context");
         let wparams = WorkerParams::default()
@@ -226,42 +293,45 @@ impl SafeMPI {
         (context, worker)
     }
 
-    fn server(listen_addr: SockaddrIn) -> SafeMPI {
+    fn server(listen_addr: &'a SockaddrIn) -> SafeMPI<'a> {
         let (context, worker) = Self::setup();
 
+        let server = Server::new(context, worker, listen_addr);
         SafeMPI {
             context,
             worker,
-            ty: SafeMPIType::Server(listen_addr),
+            ty: ManuallyDrop::new(SafeMPIType::Server(server)),
         }
     }
 
-    fn client(server_addr: &str) -> SafeMPI {
+    fn client(server_addr: &'a SockaddrIn) -> SafeMPI<'a> {
         let (context, worker) = Self::setup();
 
+        let client = Client::new(context, worker, server_addr);
         SafeMPI {
             context,
             worker,
-            ty: SafeMPIType::Client(server_addr.to_string()),
+            ty: ManuallyDrop::new(SafeMPIType::Client(client)),
         }
     }
 
     fn send(&self, buf: &[u8]) {
-        if let SafeMPIType::Server(listen_addr) = self.ty {
-            server(self.context, self.worker, listen_addr);
-        }
+        // TODO
     }
 
     fn recv(&self, buf: &mut [u8]) {
-        if let SafeMPIType::Client(server_addr) = &self.ty {
-            client(self.context, self.worker, &server_addr);
-        }
+        // TODO
     }
 }
 
-impl Drop for SafeMPI {
+impl<'a> Drop for SafeMPI<'a> {
     fn drop(&mut self) {
         unsafe {
+            eprintln!("Dropping SafeMPI");
+            // NOTE: ManuallyDrop is needed here to ensure that contained
+            //       structs are dropped before the main worker and context are
+            //       destroyed.
+            ManuallyDrop::drop(&mut self.ty);
             self.worker.destroy();
             self.context.cleanup();
         }
@@ -276,12 +346,13 @@ fn main() {
 
     if let Some(server_addr) = server_addr {
         let buf: Vec<u8> = (0..16).collect();
+        let server_addr = addr_to_sa_in(&server_addr, PORT);
         let mpi = SafeMPI::client(&server_addr);
         mpi.send(&buf);
     } else {
         let listen_addr = SockaddrIn::new(0, 0, 0, 0, PORT);
         let mut buf = [0u8; 16];
-        let mpi = SafeMPI::server(listen_addr);
+        let mpi = SafeMPI::server(&listen_addr);
         mpi.recv(&mut buf);
         println!("{:?}", buf);
     }
