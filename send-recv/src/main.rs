@@ -209,6 +209,7 @@ fn client(context: Context, worker: Worker, server_addr: &str) {
 
 pub struct Server<'a> {
     data_worker: Worker,
+    listen_ctx: Rc<RefCell<ListenerContext>>,
     lparams: ListenerParams<'a>,
     listener: Listener<'a>,
 }
@@ -232,9 +233,30 @@ impl<'a> Server<'a> {
 
         Server {
             data_worker,
+            listen_ctx,
             lparams,
             listener,
         }
+    }
+
+    fn operate(&self, worker: Worker) {
+        while self.listen_ctx.borrow().request.is_none() {
+            unsafe {
+                worker.progress();
+            }
+        }
+
+        let conn_req = self.listen_ctx.borrow_mut().request.take().unwrap();
+        let closed = Rc::new(RefCell::new(false));
+        let ep_params = EndpointParams::default()
+            .conn_request(conn_req)
+            .err_handler(|_ep, status| {
+                eprintln!("err_handler: status: {}", status.to_string());
+                *closed.borrow_mut() = true;
+            });
+        let data_ep = Endpoint::new(self.data_worker, &ep_params);
+
+        // TODO: send_recv
     }
 }
 
@@ -356,12 +378,4 @@ fn main() {
         mpi.recv(&mut buf);
         println!("{:?}", buf);
     }
-
-/*
-    if let Some(server_addr) = server_addr {
-        client(context, worker, &server_addr);
-    } else {
-        server(context, worker, listen_addr);
-    }
-*/
 }
