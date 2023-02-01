@@ -2,6 +2,8 @@ use ucx2_sys::{
     rust_ucp_init,
     ucp_cleanup,
     ucp_worker_create,
+    ucp_worker_get_address,
+    ucp_worker_release_address,
     ucs_status_string,
     ucp_ep_create,
     ucp_context_h,
@@ -10,14 +12,14 @@ use ucx2_sys::{
     ucp_params_t,
     ucp_worker_params_t,
     ucp_ep_params_t,
+    ucp_address_t,
     ucs_status_t,
     UCP_PARAM_FIELD_FEATURES,
     UCP_FEATURE_TAG,
     UCP_FEATURE_STREAM,
     UCP_WORKER_PARAM_FIELD_THREAD_MODE,
     UCS_THREAD_MODE_SINGLE,
-    // UCP_EP_PARAM_FIELD_REMOTE_ADDRESS,
-    UCP_EP_PARAM_FIELD_SOCK_ADDR,
+    UCP_EP_PARAM_FIELD_REMOTE_ADDRESS,
     UCS_OK,
 };
 use nix::sys::socket::{
@@ -26,9 +28,12 @@ use nix::sys::socket::{
 };
 use std::ffi::CStr;
 use std::mem::MaybeUninit;
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, SocketAddr, TcpStream, TcpListener, Shutdown};
+use std::io::{Read, Write};
 use std::result::Result as StandardResult;
 use std::str::FromStr;
+// TODO: Use bincode
+use serde_json;
 
 /// Default port to communicate on for now
 const PORT: u16 = 5588;
@@ -36,8 +41,10 @@ const PORT: u16 = 5588;
 pub struct Context {
     /// UCP context
     context: ucp_context_h,
-    /// Address of other process
-    address: SockaddrIn,
+    /// Socket address of other process
+    sockaddr: SocketAddr,
+    /// Run as the server when exchanging internal addresses
+    server: bool,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -48,7 +55,7 @@ pub enum Error {
 type Result<T> = StandardResult<T, Error>;
 
 /// Initialize the safe mpi context.
-pub fn init(address: &str) -> Result<Context> {
+pub fn init(sockaddr: SocketAddr, server: bool) -> Result<Context> {
     unsafe {
         let mut context = MaybeUninit::<ucp_context_h>::uninit();
         let mut params = MaybeUninit::<ucp_params_t>::uninit().assume_init();
@@ -61,14 +68,10 @@ pub fn init(address: &str) -> Result<Context> {
             Err(Error::InitFailure)
         } else {
             let context = context.assume_init();
-            // Convert the address to a SockaddrIn
-            let address = Ipv4Addr::from_str(address)
-                .expect("Failed to convert address to SockaddrIn");
-            let ip = address.octets();
-            let address = SockaddrIn::new(ip[0], ip[1], ip[2], ip[3], PORT);
             Ok(Context {
                 context,
-                address,
+                sockaddr,
+                server,
             })
         }
     }
@@ -90,16 +93,33 @@ impl Context {
             }
             let worker = worker.assume_init();
 
+            // Get the address of the worker
+            let mut address = MaybeUninit::<*mut ucp_address_t>::uninit();
+            let mut addrlen = MaybeUninit::<usize>::uninit();
+            let status = ucp_worker_get_address(worker, address.as_mut_ptr(),
+                                                addrlen.as_mut_ptr());
+            if status != UCS_OK {
+                panic!("Failed to get the address of the worker: {}",
+                       status_to_string(status));
+            }
+            let address = address.assume_init();
+            let addrlen = addrlen.assume_init();
+            // Address of the other process
+            println!("Starting address exchange");
+            let other_addr = self.exchange_addrs(address, addrlen);
+            println!("Address exchange complete");
+            ucp_worker_release_address(worker, address);
+
             // Now create the single endpoint (this will change for multiple processes)
             let mut endpoint = MaybeUninit::<ucp_ep_h>::uninit();
             let mut params = MaybeUninit::<ucp_ep_params_t>::uninit().assume_init();
-            params.field_mask = UCP_EP_PARAM_FIELD_SOCK_ADDR.into();
-            params.sockaddr.addr = self.address.as_ptr() as *const _;
-            params.sockaddr.addrlen = self.address.len();
+            // params.field_mask = UCP_EP_PARAM_FIELD_SOCK_ADDR.into();
+            // params.sockaddr.addr = self.address.as_ptr() as *const _;
+            // params.sockaddr.addrlen = self.address.len();
             // TODO: other code uses the address field, what's the difference
             // between this and the sockaddr field? Does it matter?
-            // params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS.into();
-            // params.address = self.address.
+            params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS.into();
+            params.address = other_addr.as_ptr() as *const _;
             let status = ucp_ep_create(worker, &params, endpoint.as_mut_ptr());
             if status != UCS_OK {
                 panic!("Failed to create endpoint for worker: {}", status_to_string(status));
@@ -111,6 +131,43 @@ impl Context {
                 worker,
                 endpoint,
             }
+        }
+    }
+
+    /// Exchange addresses between two processes.
+    unsafe fn exchange_addrs(&self, address: *const ucp_address_t, addrlen: usize) -> Vec<u8> {
+        // TODO: Use bincode here
+        let saddr = std::slice::from_raw_parts(address as *const u8, addrlen);
+        // TODO: There has to be a better way to do this, instead of using two
+        //       connections in a row.
+        if self.server {
+            let listener = TcpListener::bind(self.sockaddr)
+                .expect("Failed to bind TCP listener");
+            // First connection
+            let (mut stream, addr) = listener.accept()
+                .expect("Failed to accept a client connection");
+            // Receive the other address and then send ours
+            let addr_bytes: Vec<u8> = serde_json::from_reader(&mut stream)
+                .expect("Failed to parse incoming address data");
+            eprintln!("addr_bytes: {:?}", addr_bytes);
+            // Second connection
+            // Now to send the server's address
+            serde_json::to_writer(&mut stream, saddr)
+                .expect("Failed to send address data");
+            stream.flush().expect("Failed to flush stream");
+            addr_bytes
+        } else {
+            // First connection
+            let mut stream = TcpStream::connect(self.sockaddr)
+                .expect("Failed to connect to server for ucp address exchange");
+            // Send our address and then receive the other one
+            serde_json::to_writer(&mut stream, saddr)
+                .expect("Failed to send address data");
+            stream.flush().expect("Failed to flush stream");
+            stream.shutdown(Shutdown::Write);
+            eprintln!("Wrote address data");
+            serde_json::from_reader(&mut stream)
+                .expect("Failed to parse incoming address data")
         }
     }
 }
