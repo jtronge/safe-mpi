@@ -15,7 +15,6 @@ struct Args {
 }
 
 fn main() {
-    // TODO: Use clap for this
 /*
     let mut args = env::args();
     args.next();
@@ -28,13 +27,11 @@ fn main() {
     let sm = safe_mpi::init(sockaddr, args.server)
         .expect("Failed to init safe_mpi");
     let comm = sm.world();
-/*
-    if send {
-        comm.send(&[1, 2, 3, 4]);
-    } else {
+    if args.server {
         let mut buf = [0; 4];
         comm.recv(&mut buf);
         println!("{:?}", buf);
+    } else {
+        comm.send(&[1, 2, 3, 4]);
     }
- */
 }

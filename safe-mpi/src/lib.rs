@@ -1,18 +1,26 @@
 use ucx2_sys::{
     rust_ucp_init,
+    rust_ucs_ptr_is_ptr,
+    rust_ucs_ptr_is_err,
+    rust_ucs_ptr_status,
     ucp_cleanup,
     ucp_worker_create,
     ucp_worker_get_address,
     ucp_worker_release_address,
+    ucp_worker_progress,
     ucs_status_string,
     ucp_ep_create,
+    ucp_tag_send_nbx,
+    ucp_tag_recv_nbx,
     ucp_context_h,
     ucp_worker_h,
     ucp_ep_h,
     ucp_params_t,
     ucp_worker_params_t,
+    ucp_request_param_t,
     ucp_ep_params_t,
     ucp_address_t,
+    ucp_tag_recv_info_t,
     ucs_status_t,
     UCP_PARAM_FIELD_FEATURES,
     UCP_FEATURE_TAG,
@@ -20,16 +28,20 @@ use ucx2_sys::{
     UCP_WORKER_PARAM_FIELD_THREAD_MODE,
     UCS_THREAD_MODE_SINGLE,
     UCP_EP_PARAM_FIELD_REMOTE_ADDRESS,
+    UCP_OP_ATTR_FIELD_DATATYPE,
+    UCP_DATATYPE_CONTIG,
     UCS_OK,
+    UCS_INPROGRESS,
 };
 use nix::sys::socket::{
     SockaddrIn,
     SockaddrLike,
 };
 use std::ffi::CStr;
+use std::io::{Read, Write};
 use std::mem::MaybeUninit;
 use std::net::{Ipv4Addr, SocketAddr, TcpStream, TcpListener, Shutdown};
-use std::io::{Read, Write};
+use std::os::raw::c_void;
 use std::result::Result as StandardResult;
 use std::str::FromStr;
 // TODO: Use bincode
@@ -188,6 +200,100 @@ pub struct Communicator<'a> {
     /// Endpoint to other process (in a multi-process scenario there would be
     /// multiple endpoints here)
     endpoint: ucp_ep_h,
+}
+
+impl<'a> Communicator<'a> {
+    pub fn send(&self, buf: &[u8]) {
+        unsafe {
+            let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
+            param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE;
+            param.datatype = UCP_DATATYPE_CONTIG.into();
+            // param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK;
+            // param.cb.send = Some(send_nbx_callback);
+            // TODO
+            let req = ucp_tag_send_nbx(
+                self.endpoint,
+                buf.as_ptr() as *const _,
+                buf.len() * std::mem::size_of::<u8>(),
+                0,
+                &param,
+            );
+
+            if rust_ucs_ptr_is_ptr(req) == 0 {
+                // Already done
+                return;
+            }
+            if rust_ucs_ptr_is_err(req) != 0 {
+                panic!("Failed to send data");
+            }
+
+            // Wait loop
+            self.wait_loop(req);
+        }
+    }
+
+    pub fn recv(&self, buf: &mut [u8]) {
+        unsafe {
+            let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
+            param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE;
+            param.datatype = UCP_DATATYPE_CONTIG.into();
+            // param.cb.recv = Some(tag_recv_nbx_callback);
+            let req = ucp_tag_recv_nbx(
+                self.worker,
+                buf.as_mut_ptr() as *mut _,
+                buf.len() * std::mem::size_of::<u8>(),
+                0,
+                0,
+                &param,
+            );
+
+            if rust_ucs_ptr_is_ptr(req) == 0 {
+                // Already done
+                return;
+            }
+            if rust_ucs_ptr_is_err(req) != 0 {
+                panic!("Failed to receive data");
+            }
+
+            // Wait loop
+            self.wait_loop(req);
+            // TODO
+        }
+    }
+
+    /// Wait for a request to finish
+    unsafe fn wait_loop(&self, req: *const c_void) {
+        loop {
+            // First progress
+            ucp_worker_progress(self.worker);
+            // Get the status
+            let status = rust_ucs_ptr_status(req);
+            if status != UCS_INPROGRESS {
+                // Request is finished
+                // TODO: Check error
+                break;
+            }
+        }
+    }
+}
+
+/// Send callback for a non-blocking send.
+unsafe extern "C" fn send_nbx_callback(
+    req: *mut c_void,
+    status: ucs_status_t,
+    user_data: *mut c_void,
+) {
+    // TODO
+}
+
+/// Receive callback for a non-blocking receive.
+unsafe extern "C" fn tag_recv_nbx_callback(
+    req: *mut c_void,
+    status: ucs_status_t,
+    tag_info: *const ucp_tag_recv_info_t,
+    user_data: *mut c_void,
+) {
+    // TODO
 }
 
 pub(crate) fn status_to_string(status: ucs_status_t) -> String {
