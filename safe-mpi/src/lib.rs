@@ -3,6 +3,7 @@ use ucx2_sys::{
     rust_ucs_ptr_is_ptr,
     rust_ucs_ptr_is_err,
     rust_ucs_ptr_status,
+    rust_ucp_dt_make_contig,
     ucp_cleanup,
     ucp_worker_create,
     ucp_worker_get_address,
@@ -12,6 +13,8 @@ use ucx2_sys::{
     ucp_ep_create,
     ucp_tag_send_nbx,
     ucp_tag_recv_nbx,
+    ucp_stream_send_nbx,
+    ucp_stream_recv_nbx,
     ucp_context_h,
     ucp_worker_h,
     ucp_ep_h,
@@ -29,6 +32,7 @@ use ucx2_sys::{
     UCS_THREAD_MODE_SINGLE,
     UCP_EP_PARAM_FIELD_REMOTE_ADDRESS,
     UCP_OP_ATTR_FIELD_DATATYPE,
+    UCP_OP_ATTR_FIELD_CALLBACK,
     UCP_DATATYPE_CONTIG,
     UCS_OK,
     UCS_INPROGRESS,
@@ -125,11 +129,6 @@ impl Context {
             // Now create the single endpoint (this will change for multiple processes)
             let mut endpoint = MaybeUninit::<ucp_ep_h>::uninit();
             let mut params = MaybeUninit::<ucp_ep_params_t>::uninit().assume_init();
-            // params.field_mask = UCP_EP_PARAM_FIELD_SOCK_ADDR.into();
-            // params.sockaddr.addr = self.address.as_ptr() as *const _;
-            // params.sockaddr.addrlen = self.address.len();
-            // TODO: other code uses the address field, what's the difference
-            // between this and the sockaddr field? Does it matter?
             params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS.into();
             params.address = other_addr.as_ptr() as *const _;
             let status = ucp_ep_create(worker, &params, endpoint.as_mut_ptr());
@@ -176,7 +175,8 @@ impl Context {
             serde_json::to_writer(&mut stream, saddr)
                 .expect("Failed to send address data");
             stream.flush().expect("Failed to flush stream");
-            stream.shutdown(Shutdown::Write);
+            stream.shutdown(Shutdown::Write)
+                .expect("Failed to shutdown stream");
             eprintln!("Wrote address data");
             serde_json::from_reader(&mut stream)
                 .expect("Failed to parse incoming address data")
@@ -207,10 +207,7 @@ impl<'a> Communicator<'a> {
         unsafe {
             let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
             param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE;
-            param.datatype = UCP_DATATYPE_CONTIG.into();
-            // param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK;
-            // param.cb.send = Some(send_nbx_callback);
-            // TODO
+            param.datatype = rust_ucp_dt_make_contig(buf.len()).try_into().unwrap();
             let req = ucp_tag_send_nbx(
                 self.endpoint,
                 buf.as_ptr() as *const _,
@@ -219,15 +216,6 @@ impl<'a> Communicator<'a> {
                 &param,
             );
 
-            if rust_ucs_ptr_is_ptr(req) == 0 {
-                // Already done
-                return;
-            }
-            if rust_ucs_ptr_is_err(req) != 0 {
-                panic!("Failed to send data");
-            }
-
-            // Wait loop
             self.wait_loop(req);
         }
     }
@@ -236,8 +224,7 @@ impl<'a> Communicator<'a> {
         unsafe {
             let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
             param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE;
-            param.datatype = UCP_DATATYPE_CONTIG.into();
-            // param.cb.recv = Some(tag_recv_nbx_callback);
+            param.datatype = rust_ucp_dt_make_contig(buf.len()).try_into().unwrap();
             let req = ucp_tag_recv_nbx(
                 self.worker,
                 buf.as_mut_ptr() as *mut _,
@@ -247,53 +234,105 @@ impl<'a> Communicator<'a> {
                 &param,
             );
 
-            if rust_ucs_ptr_is_ptr(req) == 0 {
-                // Already done
-                return;
-            }
-            if rust_ucs_ptr_is_err(req) != 0 {
-                panic!("Failed to receive data");
-            }
-
-            // Wait loop
             self.wait_loop(req);
-            // TODO
+        }
+    }
+
+    /// Do a streaming send.
+    pub fn stream_send(&self, buf: &[u8]) {
+        unsafe {
+            let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
+            param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE
+                                 | UCP_OP_ATTR_FIELD_CALLBACK;
+            param.datatype = rust_ucp_dt_make_contig(buf.len()).try_into().unwrap();
+            param.cb.send = Some(send_nbx_callback);
+            let req = ucp_stream_send_nbx(
+                self.endpoint,
+                buf.as_ptr() as *const _,
+                buf.len() * std::mem::size_of::<u8>(),
+                &param,
+            );
+            self.wait_loop(req);
+        }
+    }
+
+    pub fn stream_recv(&self, buf: &mut [u8]) {
+        unsafe {
+            let mut length = 0;
+            let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
+            param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE
+                                 | UCP_OP_ATTR_FIELD_CALLBACK;
+            param.datatype = rust_ucp_dt_make_contig(buf.len()).try_into().unwrap();
+            param.cb.recv_stream = Some(stream_recv_nbx_callback);
+            let req = ucp_stream_recv_nbx(
+                self.endpoint,
+                buf.as_ptr() as *mut _,
+                buf.len() * std::mem::size_of::<u8>(),
+                &mut length,
+                &param,
+            );
+            if req == std::ptr::null_mut() {
+                // TODO: What to do with the length?
+            }
+            self.wait_loop(req);
         }
     }
 
     /// Wait for a request to finish
     unsafe fn wait_loop(&self, req: *const c_void) {
-        loop {
-            // First progress
-            ucp_worker_progress(self.worker);
-            // Get the status
+        if rust_ucs_ptr_is_ptr(req) == 0 {
             let status = rust_ucs_ptr_status(req);
+            if status != UCS_OK {
+                panic!("Request failed: {}", status_to_string(status));
+            }
+            // Already done
+            return;
+        }
+        if rust_ucs_ptr_is_err(req) != 0 {
+            panic!("Failed to send data");
+        }
+
+        let mut i = 0;
+        loop {
+            println!("In loop {}", i);
+            // Make some progress
+            for j in 0..1024 {
+                ucp_worker_progress(self.worker);
+            }
+            // Then get the status
+            let status = rust_ucs_ptr_status(req);
+            println!("status: {}", status_to_string(status));
             if status != UCS_INPROGRESS {
                 // Request is finished
-                // TODO: Check error
+                if status != UCS_OK {
+                    panic!(
+                        "Request failed to complete: {}",
+                        status_to_string(status),
+                    );
+                }
                 break;
             }
+            i += 1;
         }
     }
 }
 
-/// Send callback for a non-blocking send.
-unsafe extern "C" fn send_nbx_callback(
+extern "C" fn send_nbx_callback(
     req: *mut c_void,
     status: ucs_status_t,
     user_data: *mut c_void,
 ) {
-    // TODO
+    panic!("In send_nbx_callback with status: {}", status_to_string(status));
 }
 
-/// Receive callback for a non-blocking receive.
-unsafe extern "C" fn tag_recv_nbx_callback(
+extern "C" fn stream_recv_nbx_callback(
     req: *mut c_void,
     status: ucs_status_t,
-    tag_info: *const ucp_tag_recv_info_t,
+    length: usize,
     user_data: *mut c_void,
 ) {
-    // TODO
+    panic!("In stream_recv_nbx_callback with length {} and status {}",
+           length, status_to_string(status));
 }
 
 pub(crate) fn status_to_string(status: ucs_status_t) -> String {
