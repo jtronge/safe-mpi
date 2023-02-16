@@ -29,12 +29,12 @@ fn main() {
     let comm = sm.world();
     if args.server {
         let mut buf = [0; 4];
-        // comm.recv(&mut buf);
-        comm.stream_recv(&mut buf);
-        println!("{:?}", buf);
+        comm.recv(&mut buf);
+        // comm.stream_recv(&mut buf);
+        println!("data: {:?}", buf);
     } else {
         println!("Sending data");
-        // comm.send(&[1, 2, 3, 4]);
-        comm.stream_send(&[1, 2, 3, 4]);
+        comm.send(&[1, 2, 3, 4]);
+        // comm.stream_send(&[1, 2, 3, 4]);
     }
 }

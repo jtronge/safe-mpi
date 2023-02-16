@@ -1,3 +1,4 @@
+use log::{debug, error, info};
 use ucx2_sys::{
     rust_ucp_init,
     rust_ucs_ptr_is_ptr,
@@ -33,6 +34,7 @@ use ucx2_sys::{
     UCP_EP_PARAM_FIELD_REMOTE_ADDRESS,
     UCP_OP_ATTR_FIELD_DATATYPE,
     UCP_OP_ATTR_FIELD_CALLBACK,
+    UCP_OP_ATTR_FIELD_USER_DATA,
     UCP_DATATYPE_CONTIG,
     UCS_OK,
     UCS_INPROGRESS,
@@ -48,6 +50,8 @@ use std::net::{Ipv4Addr, SocketAddr, TcpStream, TcpListener, Shutdown};
 use std::os::raw::c_void;
 use std::result::Result as StandardResult;
 use std::str::FromStr;
+use std::rc::Rc;
+use std::cell::Cell;
 // TODO: Use bincode
 use serde_json;
 
@@ -72,6 +76,8 @@ type Result<T> = StandardResult<T, Error>;
 
 /// Initialize the safe mpi context.
 pub fn init(sockaddr: SocketAddr, server: bool) -> Result<Context> {
+    // Initialize logging
+    env_logger::init();
     unsafe {
         let mut context = MaybeUninit::<ucp_context_h>::uninit();
         let mut params = MaybeUninit::<ucp_params_t>::uninit().assume_init();
@@ -80,7 +86,7 @@ pub fn init(sockaddr: SocketAddr, server: bool) -> Result<Context> {
         params.features = features.into();
         let status = rust_ucp_init(&params, std::ptr::null(), context.as_mut_ptr());
         if status != UCS_OK {
-            eprintln!("Failed to create context: {}", status_to_string(status));
+            error!("Failed to create context: {}", status_to_string(status));
             Err(Error::InitFailure)
         } else {
             let context = context.assume_init();
@@ -121,9 +127,9 @@ impl Context {
             let address = address.assume_init();
             let addrlen = addrlen.assume_init();
             // Address of the other process
-            println!("Starting address exchange");
+            info!("Starting address exchange");
             let other_addr = self.exchange_addrs(address, addrlen);
-            println!("Address exchange complete");
+            info!("Address exchange complete");
             ucp_worker_release_address(worker, address);
 
             // Now create the single endpoint (this will change for multiple processes)
@@ -160,7 +166,7 @@ impl Context {
             // Receive the other address and then send ours
             let addr_bytes: Vec<u8> = serde_json::from_reader(&mut stream)
                 .expect("Failed to parse incoming address data");
-            eprintln!("addr_bytes: {:?}", addr_bytes);
+            debug!("addr_bytes: {:?}", addr_bytes);
             // Second connection
             // Now to send the server's address
             serde_json::to_writer(&mut stream, saddr)
@@ -177,7 +183,7 @@ impl Context {
             stream.flush().expect("Failed to flush stream");
             stream.shutdown(Shutdown::Write)
                 .expect("Failed to shutdown stream");
-            eprintln!("Wrote address data");
+            info!("Wrote address data");
             serde_json::from_reader(&mut stream)
                 .expect("Failed to parse incoming address data")
         }
@@ -216,15 +222,21 @@ impl<'a> Communicator<'a> {
                 &param,
             );
 
-            self.wait_loop(req);
+            self.wait_loop(req, None);
         }
     }
 
     pub fn recv(&self, buf: &mut [u8]) {
         unsafe {
+            let done = Rc::new(Cell::new(false));
             let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
-            param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE;
+            param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE
+                                 | UCP_OP_ATTR_FIELD_CALLBACK
+                                 | UCP_OP_ATTR_FIELD_USER_DATA;
             param.datatype = rust_ucp_dt_make_contig(buf.len()).try_into().unwrap();
+            param.cb.recv = Some(tag_recv_nbx_callback);
+            let done_ptr = Rc::into_raw(Rc::clone(&done)) as *mut _;
+            param.user_data = done_ptr;
             let req = ucp_tag_recv_nbx(
                 self.worker,
                 buf.as_mut_ptr() as *mut _,
@@ -234,7 +246,10 @@ impl<'a> Communicator<'a> {
                 &param,
             );
 
-            self.wait_loop(req);
+            let done_clone = Rc::clone(&done);
+            self.wait_loop(req, Some(done_clone));
+            // Convert the pointer back to an Rc and avoid the memory leak
+            Rc::from_raw(done_ptr);
         }
     }
 
@@ -252,7 +267,7 @@ impl<'a> Communicator<'a> {
                 buf.len() * std::mem::size_of::<u8>(),
                 &param,
             );
-            self.wait_loop(req);
+            self.wait_loop(req, None);
         }
     }
 
@@ -274,12 +289,14 @@ impl<'a> Communicator<'a> {
             if req == std::ptr::null_mut() {
                 // TODO: What to do with the length?
             }
-            self.wait_loop(req);
+            self.wait_loop(req, None);
         }
     }
 
-    /// Wait for a request to finish
-    unsafe fn wait_loop(&self, req: *const c_void) {
+    /// Wait for a request to finish.
+    ///
+    /// TODO: Perhaps this done variable is not following proper safety protocols
+    unsafe fn wait_loop(&self, req: *const c_void, done: Option<Rc<Cell<bool>>>) {
         if rust_ucs_ptr_is_ptr(req) == 0 {
             let status = rust_ucs_ptr_status(req);
             if status != UCS_OK {
@@ -294,14 +311,14 @@ impl<'a> Communicator<'a> {
 
         let mut i = 0;
         loop {
-            println!("In loop {}", i);
+            info!("In wait loop {}", i);
             // Make some progress
             for j in 0..1024 {
                 ucp_worker_progress(self.worker);
             }
             // Then get the status
             let status = rust_ucs_ptr_status(req);
-            println!("status: {}", status_to_string(status));
+            debug!("status: {}", status_to_string(status));
             if status != UCS_INPROGRESS {
                 // Request is finished
                 if status != UCS_OK {
@@ -310,6 +327,11 @@ impl<'a> Communicator<'a> {
                         status_to_string(status),
                     );
                 }
+                break;
+            }
+
+            // Check if the done variable is set
+            if done.is_some() && done.as_ref().unwrap().get() {
                 break;
             }
             i += 1;
@@ -323,6 +345,21 @@ extern "C" fn send_nbx_callback(
     user_data: *mut c_void,
 ) {
     panic!("In send_nbx_callback with status: {}", status_to_string(status));
+}
+
+unsafe extern "C" fn tag_recv_nbx_callback(
+    req: *mut c_void,
+    status: ucs_status_t,
+    tag_info: *const ucp_tag_recv_info_t,
+    user_data: *mut c_void,
+) {
+    if status != UCS_OK {
+        panic!("Request failed with: {}", status_to_string(status));
+    }
+    let done = Rc::from_raw(user_data as *const Cell<bool>);
+    (*done).set(true);
+    info!("Received value");
+    Rc::into_raw(done);
 }
 
 extern "C" fn stream_recv_nbx_callback(
