@@ -1,4 +1,5 @@
 use log::{debug, error, info};
+use serde::{Serialize, de::DeserializeOwned};
 use ucx2_sys::{
     rust_ucp_init,
     rust_ucs_ptr_is_ptr,
@@ -54,6 +55,10 @@ use std::rc::Rc;
 use std::cell::Cell;
 // TODO: Use bincode
 use serde_json;
+use bincode;
+
+mod request;
+use request::Request;
 
 /// Default port to communicate on for now
 const PORT: u16 = 5588;
@@ -251,6 +256,36 @@ impl<'a> Communicator<'a> {
             // Convert the pointer back to an Rc and avoid the memory leak
             Rc::from_raw(done_ptr);
         }
+    }
+
+    pub fn isend<T>(&self, data: T) -> Request<T>
+    where
+        T: Serialize + DeserializeOwned,
+    {
+        unsafe {
+            let buf: Vec<u8> = bincode::serialize(&data)
+                .expect("Failed to serialize data");
+            let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
+            param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE;
+            param.datatype = rust_ucp_dt_make_contig(buf.len()).try_into().unwrap();
+            let req = ucp_tag_send_nbx(
+                self.endpoint,
+                buf.as_ptr() as *const _,
+                buf.len() * std::mem::size_of::<u8>(),
+                0,
+                &param,
+            );
+
+            Request::new(Some(data), Some(buf), Box::new(false), req, self.worker)
+        }
+    }
+
+    pub fn irecv<T>(&self) -> Request<T>
+    where
+        T: Serialize + DeserializeOwned,
+    {
+        // TODO
+        Request::new(None, None, Box::new(false), std::ptr::null_mut(), self.worker)
     }
 
     /// Do a streaming send.

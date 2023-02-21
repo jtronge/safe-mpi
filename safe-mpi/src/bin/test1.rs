@@ -1,6 +1,7 @@
 use std::net::{Ipv4Addr, SocketAddr};
 use safe_mpi;
 use clap::Parser;
+use serde::{Serialize, Deserialize};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -12,6 +13,11 @@ struct Args {
     /// Is this the server process?
     #[arg(short, long)]
     server: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct TestData {
+    x: [f64; 2],
 }
 
 fn main() {
@@ -28,13 +34,20 @@ fn main() {
         .expect("Failed to init safe_mpi");
     let comm = sm.world();
     if args.server {
-        let mut buf = [0; 4];
-        comm.recv(&mut buf);
+        let req = comm.irecv();
+        let data: TestData = req.finish().unwrap();
+        // let mut buf = [0; 4];
+        //comm.recv(&mut buf);
         // comm.stream_recv(&mut buf);
-        println!("data: {:?}", buf);
+        println!("data: {:?}", data);
     } else {
+        let data = TestData {
+            x: [1.3, 777.8],
+        };
         println!("Sending data");
-        comm.send(&[1, 2, 3, 4]);
+        let req = comm.isend(data);
+        req.finish().unwrap();
+        // comm.send(&[1, 2, 3, 4]);
         // comm.stream_send(&[1, 2, 3, 4]);
     }
 }
