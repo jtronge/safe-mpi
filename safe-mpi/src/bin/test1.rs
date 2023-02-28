@@ -21,13 +21,6 @@ struct TestData {
 }
 
 fn main() {
-/*
-    let mut args = env::args();
-    args.next();
-    // Get the other address
-    let address = args.next().unwrap();
-    let send = &args.next().unwrap() == "send";
-*/
     let args = Args::parse();
     let sockaddr = SocketAddr::from((args.address.octets(), args.port));
     let sm = safe_mpi::init(sockaddr, args.server)
@@ -36,9 +29,6 @@ fn main() {
     if args.server {
         let req = comm.irecv();
         let data: TestData = req.finish().unwrap();
-        // let mut buf = [0; 4];
-        //comm.recv(&mut buf);
-        // comm.stream_recv(&mut buf);
         println!("data: {:?}", data);
     } else {
         let data = TestData {
@@ -47,7 +37,5 @@ fn main() {
         println!("Sending data");
         let req = comm.isend(data);
         req.finish().unwrap();
-        // comm.send(&[1, 2, 3, 4]);
-        // comm.stream_send(&[1, 2, 3, 4]);
     }
 }

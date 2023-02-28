@@ -1,59 +1,84 @@
 //! Request code.
-use log::{debug, error, info};
+use std::io::Write;
+// use log::{debug, info};
 use ucx2_sys::{
-    rust_ucs_ptr_is_ptr,
-    rust_ucs_ptr_status,
-    rust_ucs_ptr_is_err,
-    ucp_worker_progress,
     ucp_worker_h,
-    UCS_INPROGRESS,
-    UCS_OK,
+    ucp_ep_h,
 };
-use std::marker::PhantomData;
-use std::os::raw::c_void;
 use serde::{Serialize, de::DeserializeOwned};
-use crate::status_to_string;
+use crate::stream::Stream;
+use std::marker::PhantomData;
+use rmp_serde::{
+    self,
+    encode,
+    decode,
+};
 
-/// Request object.
-///
-/// TODO: this should have a lifetime to match the context object.
-pub struct Request<T> {
-    data: Option<T>,
-    buf: Option<Vec<u8>>,
-    done: Box<bool>,
-    req: *mut c_void,
-    worker: ucp_worker_h,
+pub struct RecvRequest<T> {
+    stream: Stream,
+    _marker: PhantomData<T>,
 }
 
-impl<T> Request<T>
+impl<T> RecvRequest<T>
+where
+    T: Serialize + DeserializeOwned,
+{
+    pub(crate) fn new(worker: ucp_worker_h, endpoint: ucp_ep_h) -> RecvRequest<T> {
+        RecvRequest {
+            stream: Stream::new(worker, endpoint),
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn finish(mut self) -> Result<T, decode::Error> {
+        rmp_serde::from_read(&mut self.stream)
+    }
+}
+
+#[derive(Debug)]
+pub enum SendError {
+    EncodeError(encode::Error),
+    IOError(std::io::Error),
+}
+
+/// Send request object.
+///
+/// TODO: this should have a lifetime to match the context object.
+pub struct SendRequest<T> {
+    data: T,
+    stream: Stream,
+}
+
+impl<T> SendRequest<T>
 where
     T: Serialize + DeserializeOwned,
 {
     pub fn new(
-        data: Option<T>,
-        buf: Option<Vec<u8>>,
-        done: Box<bool>,
-        req: *mut c_void,
+        data: T,
         worker: ucp_worker_h,
-    ) -> Request<T> {
-        Request {
+        endpoint: ucp_ep_h,
+    ) -> SendRequest<T> {
+        SendRequest {
             data,
-            buf,
-            done,
-            req,
-            worker,
+            stream: Stream::new(worker, endpoint),
         }
     }
 
-    pub fn finish(mut self) -> Option<T> {
-        assert!(self.req != std::ptr::null_mut());
+    pub fn finish(mut self) -> Result<T, SendError> {
+        // assert!(self.req != std::ptr::null_mut());
         // TODO: Check for send/recv type
-        unsafe {
-            self.wait_loop();
-        }
-        self.data
+        //unsafe {
+        //    self.wait_loop();
+        //}
+        // self.data
+        encode::write(&mut self.stream, &self.data)
+            .map_err(|err| SendError::EncodeError(err))?;
+        self.stream.flush()
+            .map_err(|err| SendError::IOError(err))?;
+        Ok(self.data)
     }
 
+/*
     unsafe fn wait_loop(&mut self) {
         if rust_ucs_ptr_is_ptr(self.req) == 0 {
             let status = rust_ucs_ptr_status(self.req);
@@ -71,7 +96,7 @@ where
         loop {
             info!("In wait loop {}", i);
             // Make some progress
-            for j in 0..1024 {
+            for _ in 0..1024 {
                 ucp_worker_progress(self.worker);
             }
             // Then get the status
@@ -95,4 +120,5 @@ where
             i += 1;
         }
     }
+*/
 }
