@@ -1,11 +1,14 @@
 //! Request code.
 use std::io::Write;
+use std::rc::Rc;
+use std::cell::RefCell;
 // use log::{debug, info};
 use ucx2_sys::{
     ucp_worker_h,
     ucp_ep_h,
 };
 use serde::{Serialize, de::DeserializeOwned};
+use crate::Handle;
 use crate::stream::Stream;
 use std::marker::PhantomData;
 use rmp_serde::{
@@ -23,9 +26,9 @@ impl<T> RecvRequest<T>
 where
     T: Serialize + DeserializeOwned,
 {
-    pub(crate) fn new(worker: ucp_worker_h, endpoint: ucp_ep_h) -> RecvRequest<T> {
+    pub(crate) fn new(handle: Rc<RefCell<Handle>>) -> RecvRequest<T> {
         RecvRequest {
-            stream: Stream::new(worker, endpoint),
+            stream: Stream::new(handle),
             _marker: PhantomData,
         }
     }
@@ -53,14 +56,13 @@ impl<T> SendRequest<T>
 where
     T: Serialize + DeserializeOwned,
 {
-    pub fn new(
+    pub(crate) fn new(
         data: T,
-        worker: ucp_worker_h,
-        endpoint: ucp_ep_h,
+        handle: Rc<RefCell<Handle>>,
     ) -> SendRequest<T> {
         SendRequest {
             data,
-            stream: Stream::new(worker, endpoint),
+            stream: Stream::new(handle),
         }
     }
 
@@ -77,48 +79,4 @@ where
             .map_err(|err| SendError::IOError(err))?;
         Ok(self.data)
     }
-
-/*
-    unsafe fn wait_loop(&mut self) {
-        if rust_ucs_ptr_is_ptr(self.req) == 0 {
-            let status = rust_ucs_ptr_status(self.req);
-            if status != UCS_OK {
-                panic!("Request failed: {}", status_to_string(status));
-            }
-            // Already done
-            return;
-        }
-        if rust_ucs_ptr_is_err(self.req) != 0 {
-            panic!("Failed to send data");
-        }
-
-        let mut i = 0;
-        loop {
-            info!("In wait loop {}", i);
-            // Make some progress
-            for _ in 0..1024 {
-                ucp_worker_progress(self.worker);
-            }
-            // Then get the status
-            let status = rust_ucs_ptr_status(self.req);
-            debug!("status: {}", status_to_string(status));
-            if status != UCS_INPROGRESS {
-                // Request is finished
-                if status != UCS_OK {
-                    panic!(
-                        "Request failed to complete: {}",
-                        status_to_string(status),
-                    );
-                }
-                break;
-            }
-
-            // Check if the done variable is set
-            if *self.done {
-                break;
-            }
-            i += 1;
-        }
-    }
-*/
 }

@@ -1,33 +1,28 @@
+use std::rc::Rc;
+use std::cell::RefCell;
 use serde::{Serialize, de::DeserializeOwned};
 // use log::{debug, error, info};
 use ucx2_sys::{
     ucp_worker_h,
+    ucp_ep_close_nb,
     ucp_ep_h,
+    ucp_request_free,
+    UCP_EP_CLOSE_MODE_FLUSH,
 };
 // TODO: Replace with rmp_serde
+use crate::Handle;
 use crate::context::Context;
 use crate::request::{SendRequest, RecvRequest};
+use crate::util::wait_loop;
 
-pub struct Communicator<'a> {
-    /// Save a reference to the context
-    context: &'a Context,
-    /// One worker per communicator
-    worker: ucp_worker_h,
-    /// Endpoint to other process (in a multi-process scenario there would be
-    /// multiple endpoints here)
-    endpoint: ucp_ep_h,
+pub struct Communicator {
+    handle: Rc<RefCell<Handle>>,
 }
 
-impl<'a> Communicator<'a> {
-    pub(crate) fn new(
-        context: &'a Context,
-        worker: ucp_worker_h,
-        endpoint: ucp_ep_h,
-    ) -> Communicator<'a> {
+impl Communicator {
+    pub(crate) fn new(handle: Rc<RefCell<Handle>>) -> Communicator {
         Communicator {
-            context,
-            worker,
-            endpoint,
+            handle,
         }
     }
 
@@ -35,13 +30,13 @@ impl<'a> Communicator<'a> {
     where
         T: Serialize + DeserializeOwned,
     {
-        SendRequest::new(data, self.worker, self.endpoint)
+        SendRequest::new(data, Rc::clone(&self.handle))
     }
 
     pub fn irecv<T>(&self) -> RecvRequest<T>
     where
         T: Serialize + DeserializeOwned,
     {
-        RecvRequest::new(self.worker, self.endpoint)
+        RecvRequest::new(Rc::clone(&self.handle))
     }
 }

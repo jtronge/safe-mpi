@@ -1,9 +1,11 @@
 use log::{error, info, debug};
 use ucx2_sys::{
     rust_ucp_init,
-    ucs_status_t,
     ucp_address_t,
+    ucp_cleanup,
     ucp_context_h,
+    ucp_ep_h,
+    ucp_ep_close_nb,
     ucp_params_t,
     ucp_worker_h,
     ucp_worker_create,
@@ -12,11 +14,13 @@ use ucx2_sys::{
     ucp_worker_params_t,
     ucp_worker_release_address,
     UCP_WORKER_PARAM_FIELD_THREAD_MODE,
+    ucs_status_t,
     ucs_status_string,
-    UCS_THREAD_MODE_SINGLE,
-    UCP_PARAM_FIELD_FEATURES,
+    UCP_EP_CLOSE_MODE_FLUSH,
     UCP_FEATURE_TAG,
     UCP_FEATURE_STREAM,
+    UCP_PARAM_FIELD_FEATURES,
+    UCS_THREAD_MODE_SINGLE,
     UCS_OK,
 };
 use std::ffi::CStr;
@@ -28,6 +32,8 @@ use std::net::{
     SocketAddr,
     Shutdown,
 };
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::result::Result as StandardResult;
 use serde_json;
 
@@ -36,12 +42,36 @@ mod context;
 use context::Context;
 mod request;
 mod stream;
+mod util;
+use util::wait_loop;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Error {
     InitFailure,
     WorkerCreateFailed(ucs_status_t),
     WorkerAddressFailure(ucs_status_t),
+    FailedRequest(ucs_status_t),
+}
+
+/// Handle containing the internal UCP context data and other code.
+pub(crate) struct Handle {
+    pub context: ucp_context_h,
+    pub worker: ucp_worker_h,
+    pub other_addr: Vec<u8>,
+    pub endpoint: Option<ucp_ep_h>,
+}
+
+impl Drop for Handle {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(endpoint) = self.endpoint {
+                let req = ucp_ep_close_nb(endpoint, UCP_EP_CLOSE_MODE_FLUSH);
+                wait_loop(self.worker, req, || false).unwrap();
+            }
+            ucp_worker_destroy(self.worker);
+            ucp_cleanup(self.context);
+        }
+    }
 }
 
 type Result<T> = StandardResult<T, Error>;
@@ -64,7 +94,14 @@ pub fn init(sockaddr: SocketAddr, server: bool) -> Result<Context> {
             let context = context.assume_init();
             let worker = create_worker(context)?;
             let other_addr = exchange_addrs(context, worker, server, sockaddr)?;
-            Ok(Context::new(context, worker, other_addr))
+            Ok(Context::new(
+                Rc::new(RefCell::new(Handle {
+                    context,
+                    worker,
+                    other_addr,
+                    endpoint: None,
+                })),
+            ))
         }
     }
 }

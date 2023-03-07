@@ -1,9 +1,12 @@
-use log::info;
+use std::cell::RefCell;
 use std::io::{Read, Write, Result};
 use std::mem::MaybeUninit;
 use std::os::raw::c_void;
+use std::rc::Rc;
+use log::info;
 use ucx2_sys::{
     ucp_ep_h,
+    ucp_request_free,
     ucp_request_param_t,
     ucp_worker_h,
     ucp_worker_progress,
@@ -20,21 +23,21 @@ use ucx2_sys::{
     UCS_OK,
     UCS_INPROGRESS,
 };
-use crate::status_to_string;
+use crate::{
+    Handle,
+    status_to_string,
+};
+use crate::util::wait_loop;
 
 /// The Stream struct wraps ucp streams, giving it a Read and Write interface.
 pub(crate) struct Stream {
-    worker: ucp_worker_h,
-    endpoint: ucp_ep_h,
-    reqs: Vec<*mut c_void>,
+    handle: Rc<RefCell<Handle>>,
 }
 
 impl Stream {
-    pub(crate) fn new(worker: ucp_worker_h, endpoint: ucp_ep_h) -> Stream {
+    pub(crate) fn new(handle: Rc<RefCell<Handle>>) -> Stream {
         Stream {
-            worker,
-            endpoint,
-            reqs: vec![],
+            handle,
         }
     }
 }
@@ -55,7 +58,7 @@ impl Read for Stream {
             param.user_data = cb_info as *mut _;
 
             let req = ucp_stream_recv_nbx(
-                self.endpoint,
+                self.handle.borrow().endpoint.unwrap(),
                 buf.as_ptr() as *mut _,
                 buf.len() * std::mem::size_of::<u8>(),
                 &mut length,
@@ -69,7 +72,11 @@ impl Read for Stream {
                 // ucp bug?
                 Ok(buf.len())
             } else {
-                wait_loop(self.worker, req, || (*cb_info).is_some());
+                wait_loop(
+                    self.handle.borrow().worker,
+                    req,
+                    || (*cb_info).is_some(),
+                ).unwrap();
                 let length = (*cb_info).unwrap();
                 if length > buf.len() {
                     Ok(buf.len())
@@ -100,14 +107,14 @@ impl Write for Stream {
             param.user_data = cb_info as *mut _;
 
             let req = ucp_stream_send_nbx(
-                self.endpoint,
+                self.handle.borrow().endpoint.unwrap(),
                 buf.as_ptr() as *const _,
                 buf.len() * std::mem::size_of::<u8>(),
                 &param,
             );
 
             info!("wrote buf.len(): {}", buf.len());
-            wait_loop(self.worker, req, || *cb_info);
+            wait_loop(self.handle.borrow().worker, req, || *cb_info).unwrap();
 
             // Deallocate the callback info
             let _ = Box::from_raw(cb_info);
@@ -117,41 +124,6 @@ impl Write for Stream {
 
     fn flush(&mut self) -> Result<()> {
         Ok(())
-    }
-}
-
-/// Wait for the request to complete
-unsafe fn wait_loop<F>(worker: ucp_worker_h, req: *mut c_void, f: F)
-where
-    F: Fn() -> bool,
-{
-    // TODO: Maybe this check should be done in the calling code
-    if rust_ucs_ptr_is_ptr(req) == 0 {
-        let status = rust_ucs_ptr_status(req);
-        if status != UCS_OK {
-            panic!("Request failed: {}", status_to_string(status));
-        }
-        // Already complete
-        return;
-    }
-
-    if rust_ucs_ptr_is_err(req) != 0 {
-        panic!("Failed to send data");
-    }
-
-    while !f() {
-        info!("Waiting for request completion");
-        for _ in 0..512 {
-            ucp_worker_progress(worker);
-        }
-
-        let status = rust_ucs_ptr_status(req);
-        if status != UCS_INPROGRESS {
-            if status != UCS_OK {
-                panic!("Failed request: {}", status_to_string(status));
-            }
-            break;
-        }
     }
 }
 
