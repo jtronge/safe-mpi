@@ -49,9 +49,11 @@ impl Read for Stream {
                                  | UCP_OP_ATTR_FIELD_USER_DATA;
             param.datatype = rust_ucp_dt_make_contig(buf.len()).try_into().unwrap();
             param.cb.recv_stream = Some(stream_recv_nbx_callback);
+            // Allocate callback info
             let cb_info: Box<Option<usize>> = Box::new(None);
             let cb_info = Box::into_raw(cb_info);
             param.user_data = cb_info as *mut _;
+
             let req = ucp_stream_recv_nbx(
                 self.endpoint,
                 buf.as_ptr() as *mut _,
@@ -59,13 +61,26 @@ impl Read for Stream {
                 &mut length,
                 &param,
             );
+
+            // Check for immediate completion
             let res = if req == std::ptr::null_mut() {
-                // Completed immediately
-                Ok(length)
+                info!("length as set: {}", length);
+                // Ok(length)
+                // ucp bug?
+                Ok(buf.len())
             } else {
                 wait_loop(self.worker, req, || (*cb_info).is_some());
-                Ok((*cb_info).unwrap())
+                let length = (*cb_info).unwrap();
+                if length > buf.len() {
+                    Ok(buf.len())
+                } else {
+                    Ok(length)
+                }
             };
+
+            info!("read result: {:?}, buf.len(): {}", res, buf.len());
+            // Deallocate callback info
+            let _ = Box::from_raw(cb_info);
             res
         }
     }
@@ -80,13 +95,22 @@ impl Write for Stream {
                                  | UCP_OP_ATTR_FIELD_USER_DATA;
             param.datatype = rust_ucp_dt_make_contig(buf.len()).try_into().unwrap();
             param.cb.send = Some(send_nbx_callback);
+            // Allocate callback info
+            let cb_info: *mut bool = Box::into_raw(Box::new(false));
+            param.user_data = cb_info as *mut _;
+
             let req = ucp_stream_send_nbx(
                 self.endpoint,
                 buf.as_ptr() as *const _,
                 buf.len() * std::mem::size_of::<u8>(),
                 &param,
             );
-            wait_loop(self.worker, req, || false);
+
+            info!("wrote buf.len(): {}", buf.len());
+            wait_loop(self.worker, req, || *cb_info);
+
+            // Deallocate the callback info
+            let _ = Box::from_raw(cb_info);
             Ok(buf.len())
         }
     }
@@ -115,7 +139,7 @@ where
         panic!("Failed to send data");
     }
 
-    loop {
+    while !f() {
         info!("Waiting for request completion");
         for _ in 0..512 {
             ucp_worker_progress(worker);
@@ -126,10 +150,6 @@ where
             if status != UCS_OK {
                 panic!("Failed request: {}", status_to_string(status));
             }
-            break;
-        }
-
-        if f() {
             break;
         }
     }
@@ -143,8 +163,8 @@ unsafe extern "C" fn stream_recv_nbx_callback(
 ) {
     if status == UCS_OK {
         let cb_info = user_data as *mut Option<usize>;
+        info!("length: {}", length);
         (*cb_info).insert(length);
-        panic!("cb_info is set");
     }
 }
 
@@ -153,5 +173,8 @@ unsafe extern "C" fn send_nbx_callback(
     status: ucs_status_t,
     user_data: *mut c_void,
 ) {
-    panic!("In send_nbx_callback");
+    if status == UCS_OK {
+        let cb_info = user_data as *mut bool;
+        *cb_info = true;
+    }
 }
