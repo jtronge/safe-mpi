@@ -5,4 +5,5 @@ members = [
     "send-recv",
     "safe-mpi",
     "msgpk-test",
+    "iovec",
 ]
