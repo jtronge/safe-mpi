@@ -24,6 +24,7 @@ use ucx2_sys::{
     UCP_OP_ATTR_FIELD_DATATYPE,
     UCP_OP_ATTR_FIELD_CALLBACK,
     UCP_OP_ATTR_FIELD_USER_DATA,
+    UCP_OP_ATTR_FLAG_NO_IMM_CMPL,
     UCS_OK,
 };
 use rmp_serde;
@@ -112,8 +113,6 @@ impl Communicator {
         let buf = rmp_serde::to_vec(data).unwrap();
         let worker = self.handle.borrow().worker;
         let endpoint = self.handle.borrow().endpoint.unwrap();
-        let len = buf.len();
-        send(worker, endpoint, 1, &len.to_be_bytes()[..])?;
         send(worker, endpoint, 0, &buf)
     }
 
@@ -121,7 +120,38 @@ impl Communicator {
     where
         T: Serialize + DeserializeOwned + Default,
     {
-        let worker = self.handle.borrow().worker;
+        unsafe {
+            let mut info = MaybeUninit::<ucp_tag_recv_info_t>::uninit();
+            let worker = self.handle.borrow().worker;
+            let mut msg;
+            loop {
+                // Make sure to call ucp_worker_progress first, otherwise bad
+                // things will happen
+                ucp_worker_progress(worker);
+                msg = ucp_tag_probe_nb(worker, 0, 0, 1, info.as_mut_ptr());
+                if msg != std::ptr::null_mut() {
+                    break;
+                }
+            }
+            let info = info.assume_init();
+            let mut buf = vec![0; info.length];
+
+            let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
+            param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK
+                                 | UCP_OP_ATTR_FIELD_DATATYPE
+                                 | UCP_OP_ATTR_FIELD_USER_DATA
+                                 | UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
+            param.datatype = rust_ucp_dt_make_contig(1).try_into().unwrap();
+            param.cb.recv = Some(tag_recv_nbx_callback);
+            let cb_info = Box::into_raw(Box::new(false));
+            param.user_data = cb_info as *mut _;
+            let req = ucp_tag_msg_recv_nbx(worker, buf.as_mut_ptr() as *mut _, info.length, msg, &param);
+            wait_loop(worker, req, || *cb_info).unwrap();
+            let _ = Box::from_raw(cb_info);
+            rmp_serde::decode::from_slice(&buf)
+                .map_err(|_| Error::DeserializeError)
+        }
+/*
         let ulen = std::mem::size_of::<usize>();
         let mut ubuf = vec![0; ulen];
         recv(worker, 1, &mut ubuf).unwrap();
@@ -130,6 +160,7 @@ impl Communicator {
         recv(worker, 0, &mut buf).unwrap();
         rmp_serde::decode::from_slice(&buf)
             .map_err(|err| Error::DeserializeError)
+*/
 /*
             Ok(T::default())
 */
