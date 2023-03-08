@@ -28,6 +28,7 @@ use crate::{
     status_to_string,
 };
 use crate::util::wait_loop;
+use crate::callbacks::send_nbx_callback;
 
 /// The Stream struct wraps ucp streams, giving it a Read and Write interface.
 pub(crate) struct Stream {
@@ -137,16 +138,5 @@ unsafe extern "C" fn stream_recv_nbx_callback(
         let cb_info = user_data as *mut Option<usize>;
         info!("length: {}", length);
         (*cb_info).insert(length);
-    }
-}
-
-unsafe extern "C" fn send_nbx_callback(
-    req: *mut c_void,
-    status: ucs_status_t,
-    user_data: *mut c_void,
-) {
-    if status == UCS_OK {
-        let cb_info = user_data as *mut bool;
-        *cb_info = true;
     }
 }

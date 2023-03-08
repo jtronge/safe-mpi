@@ -6,6 +6,7 @@ use ucx2_sys::{
     rust_ucs_ptr_is_ptr,
     ucp_worker_h,
     ucp_worker_progress,
+    ucp_request_free,
     UCS_OK,
     UCS_INPROGRESS,
 };
@@ -45,5 +46,6 @@ where
         }
     }
 
+    ucp_request_free(req);
     Ok(())
 }

@@ -31,11 +31,25 @@ use std::net::{
     TcpStream,
     SocketAddr,
     Shutdown,
+    Ipv4Addr,
 };
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::result::Result as StandardResult;
 use serde_json;
+use clap::Parser;
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+pub struct Args {
+    /// IPv4 address of other process
+    pub address: Ipv4Addr,
+    /// TCP port of other process
+    pub port: u16,
+    /// Is this the server process?
+    #[arg(short, long)]
+    pub server: bool,
+}
 
 mod communicator;
 mod context;
@@ -44,6 +58,7 @@ mod request;
 mod stream;
 mod util;
 use util::wait_loop;
+mod callbacks;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Error {
@@ -51,6 +66,8 @@ pub enum Error {
     WorkerCreateFailed(ucs_status_t),
     WorkerAddressFailure(ucs_status_t),
     FailedRequest(ucs_status_t),
+    WorkerWait(ucs_status_t),
+    DeserializeError,
 }
 
 /// Handle containing the internal UCP context data and other code.
