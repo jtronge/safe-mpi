@@ -55,7 +55,7 @@ mod communicator;
 mod context;
 use context::Context;
 // mod request;
-mod stream;
+// mod stream;
 mod util;
 use util::wait_loop;
 mod callbacks;

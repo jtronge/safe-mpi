@@ -13,7 +13,6 @@ pub(crate) unsafe extern "C" fn send_nbx_callback(
 ) {
     let cb_info = user_data as *mut bool;
     *cb_info = status == UCS_OK;
-    // panic!("Sent: {}", status);
 }
 
 pub(crate) unsafe extern "C" fn tag_recv_nbx_callback(
@@ -23,5 +22,5 @@ pub(crate) unsafe extern "C" fn tag_recv_nbx_callback(
     user_data: *mut c_void,
 ) {
     let done = user_data as *mut bool;
-    (*done) = status == UCS_OK;
+    *done = status == UCS_OK;
 }
