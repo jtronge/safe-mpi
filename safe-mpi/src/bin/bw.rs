@@ -28,6 +28,7 @@ fn main() {
     while size <= MAX_MESSAGE_SIZE {
         size *= 2;
         for _ in 0..ITERATIONS {
+/*
             if args.server {
                 let req = comm.irecv();
                 let data: Vec<Matrix3<f64>> = req.finish().unwrap();
@@ -43,6 +44,7 @@ fn main() {
                let req = comm.isend(data);
                req.finish().unwrap();
             }
+*/
         }
     }
 }

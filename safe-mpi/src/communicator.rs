@@ -36,7 +36,7 @@ use crate::{
     status_to_string,
 };
 use crate::context::Context;
-use crate::request::{SendRequest, RecvRequest};
+// use crate::request::{SendRequest, RecvRequest};
 use crate::util::wait_loop;
 use crate::callbacks::{
     send_nbx_callback,
@@ -212,6 +212,7 @@ impl Communicator {
 */
     }
 
+/*
     pub fn isend<T>(&self, data: T) -> SendRequest<T>
     where
         T: Serialize + DeserializeOwned,
@@ -225,6 +226,7 @@ impl Communicator {
     {
         RecvRequest::new(Rc::clone(&self.handle))
     }
+*/
 }
 
 pub(crate) unsafe extern "C" fn tag_recv_info_callback(

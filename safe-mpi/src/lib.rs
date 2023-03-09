@@ -54,7 +54,7 @@ pub struct Args {
 mod communicator;
 mod context;
 use context::Context;
-mod request;
+// mod request;
 mod stream;
 mod util;
 use util::wait_loop;
@@ -68,6 +68,7 @@ pub enum Error {
     FailedRequest(ucs_status_t),
     WorkerWait(ucs_status_t),
     DeserializeError,
+    SerializeError,
 }
 
 /// Handle containing the internal UCP context data and other code.

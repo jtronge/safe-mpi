@@ -8,9 +8,10 @@ pub enum Chunk {
 
 pub trait ChunkSerDe {
     fn serialize(&self, chunks: &mut Vec<Chunk>);
-    fn deserialize(&self, data: &[u8]) -> Self;
+    fn deserialize(data: &[u8]) -> Self;
 }
 
+#[derive(Debug)]
 struct A {
     x: u32,
     y: [f64; 4],
@@ -28,11 +29,27 @@ impl ChunkSerDe for A {
         chunks.push(Chunk::Pointer(self.data.as_ptr() as *const _, self.data.len() * std::mem::size_of::<f64>()));
     }
 
-    fn deserialize(&self, data: &[u8]) -> Self {
-        Self {
-            x: 100,
-            y: [1.0, 2.0, 3.0, 4.0],
-            data: vec![],
+    fn deserialize(data: &[u8]) -> Self {
+        unsafe {
+            let ptr = data.as_ptr() as *const u32;
+            let x = ptr.read_unaligned();
+            let ptr = ptr.offset(1) as *const [f64; 4];
+            let y: [f64; 4] = ptr.read_unaligned().clone();
+            let ptr = ptr.offset(1) as *const u8;
+            let len_slice = std::slice::from_raw_parts(ptr, std::mem::size_of::<usize>());
+            let len = usize::from_be_bytes(len_slice.try_into().unwrap());
+            let mut ptr = ptr.offset(std::mem::size_of::<usize>().try_into().unwrap()) as *const f64;
+            let mut data = Vec::new();
+            data.reserve(len);
+            for _ in 0..len {
+                data.push(ptr.read_unaligned());
+                ptr = ptr.offset(1);
+            }
+            Self {
+                x,
+                y,
+                data,
+            }
         }
     }
 }
@@ -61,4 +78,17 @@ fn main() {
         })
         .collect();
     println!("iovecs = {:?}", iovecs);
+    let data: Vec<u8> = chunks
+        .iter()
+        .map(|chunk| match chunk {
+            Chunk::Pointer(buffer, length) => unsafe {
+                std::slice::from_raw_parts(*buffer, *length)
+            }
+            Chunk::Data(data) => &data[..],
+        })
+        .flatten()
+        .map(|i| *i)
+        .collect();
+    let new_a = A::deserialize(&data);
+    println!("new_a = {:?}", new_a);
 }
