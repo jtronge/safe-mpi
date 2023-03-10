@@ -7,6 +7,7 @@ use ucx2_sys::{
     ucp_ep_h,
     ucp_ep_close_nb,
     ucp_params_t,
+    ucp_tag_t,
     ucp_worker_h,
     ucp_worker_create,
     ucp_worker_destroy,
@@ -51,9 +52,12 @@ pub struct Args {
     pub server: bool,
 }
 
+pub type Tag = ucp_tag_t;
+
 mod communicator;
 mod context;
 use context::Context;
+pub mod data_controllers;
 // mod request;
 // mod stream;
 mod util;

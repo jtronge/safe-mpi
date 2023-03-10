@@ -31,6 +31,7 @@ use crate::{
     Result,
     Error,
     Handle,
+    Tag,
     status_to_string,
 };
 use crate::context::Context;
@@ -44,7 +45,7 @@ pub struct Communicator {
     handle: Rc<RefCell<Handle>>,
 }
 
-pub fn send(worker: ucp_worker_h, endpoint: ucp_ep_h, tag: ucp_tag_t, buf: &[u8]) -> Result<usize> {
+pub fn send(worker: ucp_worker_h, endpoint: ucp_ep_h, tag: Tag, buf: &[u8]) -> Result<usize> {
     unsafe {
         let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
         param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE
@@ -103,20 +104,18 @@ impl Communicator {
         }
     }
 
-    pub fn send<T>(&self, data: &T) -> Result<usize>
-    where
-        T: Serialize + DeserializeOwned,
-    {
-        let buf = rmp_serde::to_vec(data).unwrap();
+    pub fn send(&self, data: Data, tag: Tag) -> Result<usize> {
         let worker = self.handle.borrow().worker;
         let endpoint = self.handle.borrow().endpoint.unwrap();
-        send(worker, endpoint, 0, &buf)
+        match data {
+            Data::Contiguous(buf) => {
+                send(worker, endpoint, tag, buf)
+            }
+            _ => panic!("not implemented"),
+        }
     }
 
-    pub fn recv<T>(&self) -> Result<T>
-    where
-        T: Serialize + DeserializeOwned + Default,
-    {
+    pub fn recv(&self, tag: Tag) -> Result<Vec<u8>> {
         unsafe {
             let mut info = MaybeUninit::<ucp_tag_recv_info_t>::uninit();
             let worker = self.handle.borrow().worker;
@@ -125,7 +124,7 @@ impl Communicator {
                 // Make sure to call ucp_worker_progress first, otherwise bad
                 // things will happen
                 ucp_worker_progress(worker);
-                msg = ucp_tag_probe_nb(worker, 0, 0, 1, info.as_mut_ptr());
+                msg = ucp_tag_probe_nb(worker, tag, 0, 1, info.as_mut_ptr());
                 if msg != std::ptr::null_mut() {
                     break;
                 }
@@ -145,8 +144,14 @@ impl Communicator {
             let req = ucp_tag_msg_recv_nbx(worker, buf.as_mut_ptr() as *mut _, info.length, msg, &param);
             wait_loop(worker, req, || *cb_info).unwrap();
             let _ = Box::from_raw(cb_info);
-            rmp_serde::decode::from_slice(&buf)
-                .map_err(|_| Error::DeserializeError)
+            Ok(buf)
         }
     }
+}
+
+pub enum Data<'a> {
+    /// Contiguous data contained all in one stream
+    Contiguous(&'a [u8]),
+    /// Data broken up into chunks of references
+    Chunked(&'a [&'a [u8]]),
 }
