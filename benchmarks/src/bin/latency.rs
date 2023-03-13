@@ -3,13 +3,13 @@ use std::time::Instant;
 use clap::Parser;
 use safe_mpi::{
     self,
-    Args,
     data_controllers::{
         BincodeController,
         MessagePackController,
         PostcardController,
     },
 };
+use benchmarks::Args;
 // use nalgebra::Matrix3;
 
 const ITERATIONS: usize = 512;

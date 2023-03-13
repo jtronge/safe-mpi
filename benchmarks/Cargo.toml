@@ -1,0 +1,10 @@
+[package]
+name = "benchmarks"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+safe-mpi = { path = "../safe-mpi" }
+serde = { version = "1.0.152", features = ["derive"] }
+nalgebra = { version = "0.32.2", features = ["serde-serialize"] }
+clap = { version = "4.1.4", features = ["derive"] }

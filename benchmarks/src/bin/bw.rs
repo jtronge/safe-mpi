@@ -2,10 +2,10 @@ use std::net::SocketAddr;
 use clap::Parser;
 use safe_mpi::{
     self,
-    Args,
 };
 use serde::{Serialize, Deserialize};
 use nalgebra::Matrix3;
+use benchmarks::Args;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct TestData {

@@ -6,4 +6,5 @@ members = [
     "safe-mpi",
     "msgpk-test",
     "iovec",
+    "benchmarks",
 ]
