@@ -1,6 +1,12 @@
 use std::net::Ipv4Addr;
 use clap::Parser;
 
+mod latency;
+pub use latency::{
+    latency,
+    LatencyOptions,
+};
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
@@ -12,4 +18,3 @@ pub struct Args {
     #[arg(short, long)]
     pub server: bool,
 }
-

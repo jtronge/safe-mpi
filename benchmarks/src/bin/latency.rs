@@ -9,7 +9,11 @@ use safe_mpi::{
         PostcardController,
     },
 };
-use benchmarks::Args;
+use benchmarks::{
+    latency,
+    LatencyOptions,
+    Args,
+};
 // use nalgebra::Matrix3;
 
 const ITERATIONS: usize = 512;
@@ -25,31 +29,27 @@ fn main() {
     let comm = BincodeController::new(sm.world());
     // let comm = PostcardController::new(sm.world());
 
-    let mut count = 2;
-    while count <= 512 {
-        let s_buf: Vec<f64> = (0..count).map(|i| i as f64).collect();
-        let mut total_time = 0.0;
-        for i in 0..ITERATIONS + SKIP {
-            if args.server {
-                for j in 0..=WARMUP_VALIDATION {
-                    let start = Instant::now();
-                    comm.send(&s_buf, 0).unwrap();
-                    let _data: Vec<f64> = comm.recv(0).unwrap();
-                    if i >= SKIP && j == WARMUP_VALIDATION {
-                        total_time += Instant::now().duration_since(start).as_secs_f32();
-                    }
-                }
-            } else {
-                for j in 0..=WARMUP_VALIDATION {
-                    let _data: Vec<f64> = comm.recv(0).unwrap();
-                    comm.send(&s_buf, 0).unwrap();
-                }
-            }
+    let results = benchmarks::latency(
+        LatencyOptions {
+            iterations: ITERATIONS,
+            skip: SKIP,
+            warmup_validation: WARMUP_VALIDATION,
+            min_size: 2,
+            max_size: 512,
+            rank: if args.server { 0 } else { 1 },
+        },
+        |size: usize| (0..size).map(|i| i as f64).collect::<Vec<f64>>(),
+        |s_buf| {
+            comm.send(s_buf, 0).unwrap();
+            let _data: Vec<f64> = comm.recv(0).unwrap();
+        },
+        |s_buf| {
+            let _data: Vec<f64> = comm.recv(0).unwrap();
+            comm.send(s_buf, 0).unwrap();
         }
-        if args.server {
-            let latency = (total_time * 1.0e6) / (2.0 * ITERATIONS as f32);
-            println!("{} {}", count, latency);
-        }
-        count *= 2;
+    );
+
+    for (size, lat) in results {
+        println!("{} {}", size, lat);
     }
 }
