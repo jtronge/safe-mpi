@@ -1,6 +1,6 @@
 use serde::{Serialize, de::DeserializeOwned};
 use postcard;
-use crate::{
+use safe_mpi::{
     Result,
     Error,
     Tag,
@@ -9,6 +9,7 @@ use crate::{
         Data,
     },
 };
+use crate::data_controllers::SerdeController;
 
 pub struct PostcardController {
     pub comm: Communicator,
@@ -20,8 +21,10 @@ impl PostcardController {
             comm,
         }
     }
+}
 
-    pub fn send<T>(&self, data: &T, tag: Tag) -> Result<usize>
+impl SerdeController for PostcardController {
+    fn send<T>(&self, data: &T, tag: Tag) -> Result<usize>
     where
         T: Serialize + DeserializeOwned,
     {
@@ -31,7 +34,7 @@ impl PostcardController {
         self.comm.send(buf, tag)
     }
 
-    pub fn recv<T>(&self, tag: Tag) -> Result<T>
+    fn recv<T>(&self, tag: Tag) -> Result<T>
     where
         T: Serialize + DeserializeOwned,
     {

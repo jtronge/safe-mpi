@@ -1,5 +1,6 @@
 use serde::{Serialize, de::DeserializeOwned};
-use crate::{
+use rmp_serde;
+use safe_mpi::{
     Result,
     Error,
     Tag,
@@ -8,34 +9,37 @@ use crate::{
         Data,
     },
 };
+use crate::data_controllers::SerdeController;
 
-pub struct BincodeController {
+pub struct MessagePackController {
     pub comm: Communicator,
 }
 
-impl BincodeController {
-    pub fn new(comm: Communicator) -> BincodeController {
-        BincodeController {
+impl MessagePackController {
+    pub fn new(comm: Communicator) -> MessagePackController {
+        MessagePackController {
             comm,
         }
     }
+}
 
-    pub fn send<T>(&self, data: &T, tag: Tag) -> Result<usize>
+impl SerdeController for MessagePackController {
+    fn send<T>(&self, data: &T, tag: Tag) -> Result<usize>
     where
         T: Serialize + DeserializeOwned,
     {
-        let buf = bincode::serialize(data)
+        let buf = rmp_serde::to_vec(data)
             .map_err(|_| Error::SerializeError)?;
         let buf = Data::Contiguous(&buf);
         self.comm.send(buf, tag)
     }
 
-    pub fn recv<T>(&self, tag: Tag) -> Result<T>
+    fn recv<T>(&self, tag: Tag) -> Result<T>
     where
         T: Serialize + DeserializeOwned,
     {
         let buf = self.comm.recv(tag)?;
-        bincode::deserialize(&buf)
+        rmp_serde::decode::from_slice(&buf)
             .map_err(|_| Error::DeserializeError)
     }
 }

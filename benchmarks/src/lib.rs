@@ -1,6 +1,10 @@
 use std::net::Ipv4Addr;
-use clap::Parser;
+use clap::{
+    Parser,
+    ValueEnum,
+};
 
+pub mod data_controllers;
 mod latency;
 pub use latency::{
     latency,
@@ -17,4 +21,14 @@ pub struct Args {
     /// Is this the server process?
     #[arg(short, long)]
     pub server: bool,
+    /// Which kind of benchmark to run
+    #[arg(value_enum)]
+    pub kind: Kind,
+}
+
+#[derive(Clone, Debug, ValueEnum)]
+pub enum Kind {
+    MessagePack,
+    Postcard,
+    Bincode,
 }

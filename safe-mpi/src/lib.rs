@@ -41,12 +41,9 @@ use serde_json;
 
 pub type Tag = ucp_tag_t;
 
-mod communicator;
+pub mod communicator;
 mod context;
 use context::Context;
-pub mod data_controllers;
-// mod request;
-// mod stream;
 mod util;
 use util::wait_loop;
 mod callbacks;
@@ -83,7 +80,7 @@ impl Drop for Handle {
     }
 }
 
-type Result<T> = StandardResult<T, Error>;
+pub type Result<T> = StandardResult<T, Error>;
 
 /// Initialize the safe mpi context.
 pub fn init(sockaddr: SocketAddr, server: bool) -> Result<Context> {

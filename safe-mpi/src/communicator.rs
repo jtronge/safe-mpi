@@ -26,7 +26,6 @@ use ucx2_sys::{
     UCP_OP_ATTR_FLAG_NO_IMM_CMPL,
     UCS_OK,
 };
-use rmp_serde;
 use crate::{
     Result,
     Error,
