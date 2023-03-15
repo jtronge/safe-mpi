@@ -1,4 +1,6 @@
 use std::net::Ipv4Addr;
+use serde::de::DeserializeOwned;
+use std::path::Path;
 use clap::{
     Parser,
     ValueEnum,
@@ -31,4 +33,21 @@ pub enum Kind {
     MessagePack,
     Postcard,
     Bincode,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum BenchmarkError {
+    IOError,
+    DeserializeError,
+}
+
+/// Load a config from a file path.
+pub fn load_config<P, T>(path: P) -> Result<T, BenchmarkError>
+where
+    P: AsRef<Path>,
+    T: DeserializeOwned,
+{
+    serde_yaml::from_reader(
+        std::fs::File::open(path).map_err(|_| BenchmarkError::IOError)?
+    ).map_err(|_| BenchmarkError::DeserializeError)
 }

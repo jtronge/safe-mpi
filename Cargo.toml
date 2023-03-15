@@ -7,4 +7,5 @@ members = [
     "msgpk-test",
     "iovec",
     "benchmarks",
+    "datatypes",
 ]

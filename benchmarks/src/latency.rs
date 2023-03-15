@@ -1,12 +1,13 @@
 use std::time::Instant;
+use serde::Deserialize;
 
+#[derive(Debug, Deserialize)]
 pub struct LatencyOptions {
     pub iterations: usize,
     pub skip: usize,
     pub warmup_validation: usize,
     pub min_size: usize,
     pub max_size: usize,
-    pub rank: usize,
 }
 
 /// Generic latency benchmark function.
@@ -16,6 +17,7 @@ pub struct LatencyOptions {
 /// communicator respectively.
 pub fn latency<T, P, B0, B1>(
     opts: LatencyOptions,
+    rank: isize,
     prepare: P,
     body0: B0,
     body1: B1,
@@ -31,7 +33,7 @@ where
         let mut total_time = 0.0;
         let data = prepare(size);
         for i in 0..opts.iterations + opts.skip {
-            if opts.rank == 0 {
+            if rank == 0 {
                 for j in 0..=opts.warmup_validation {
                     let start = Instant::now();
                     body0(&data);
@@ -47,7 +49,7 @@ where
                 }
             }
         }
-        if opts.rank == 0 {
+        if rank == 0 {
             let latency = (total_time * 1.0e6) / (2.0 * opts.iterations as f32);
             results.push((size, latency));
         }
