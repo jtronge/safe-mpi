@@ -1,15 +1,6 @@
+use std::slice::from_raw_parts;
 use ucx2_sys::ucp_dt_iov;
-
-#[derive(Debug)]
-pub enum Chunk {
-    Pointer(*const u8, usize),
-    Data(Vec<u8>),
-}
-
-pub trait ChunkSerDe {
-    fn serialize(&self, chunks: &mut Vec<Chunk>);
-    fn deserialize(data: &[u8]) -> Self;
-}
+use iovec::{Chunk, ChunkSerDe};
 
 #[derive(Debug)]
 struct A {
@@ -20,13 +11,15 @@ struct A {
 
 impl ChunkSerDe for A {
     fn serialize(&self, chunks: &mut Vec<Chunk>) {
-        chunks.push(Chunk::Pointer(std::ptr::addr_of!(self.x) as *const _, std::mem::size_of::<u32>()));
-        chunks.push(Chunk::Pointer(self.y.as_ptr() as *const _, self.y.len() * std::mem::size_of::<f64>()));
-        // First the length
-        let len = self.data.len().to_be_bytes().to_vec();
-        chunks.push(Chunk::Data(len));
-        // Now the data
-        chunks.push(Chunk::Pointer(self.data.as_ptr() as *const _, self.data.len() * std::mem::size_of::<f64>()));
+        unsafe {
+            chunks.push(Chunk::Slice(from_raw_parts(std::ptr::addr_of!(self.x) as *const _, std::mem::size_of::<u32>())));
+            chunks.push(Chunk::Slice(from_raw_parts(self.y.as_ptr() as *const _, self.y.len() * std::mem::size_of::<f64>())));
+            // First the length
+            let len = self.data.len().to_be_bytes().to_vec();
+            chunks.push(Chunk::Data(len));
+            // Now the data
+            chunks.push(Chunk::Slice(from_raw_parts(self.data.as_ptr() as *const _, self.data.len() * std::mem::size_of::<f64>())));
+        }
     }
 
     fn deserialize(data: &[u8]) -> Self {
@@ -67,9 +60,9 @@ fn main() {
     let iovecs: Vec<ucp_dt_iov> = chunks
         .iter()
         .map(|chunk| match chunk {
-            Chunk::Pointer(buffer, length) => ucp_dt_iov {
-                buffer: *buffer as *mut _,
-                length: *length,
+            Chunk::Slice(buf) => ucp_dt_iov {
+                buffer: buf.as_ptr() as *mut _,
+                length: buf.len(),
             },
             Chunk::Data(data) => ucp_dt_iov {
                 buffer: data.as_ptr() as *mut _,
@@ -81,9 +74,7 @@ fn main() {
     let data: Vec<u8> = chunks
         .iter()
         .map(|chunk| match chunk {
-            Chunk::Pointer(buffer, length) => unsafe {
-                std::slice::from_raw_parts(*buffer, *length)
-            }
+            Chunk::Slice(buf) => buf,
             Chunk::Data(data) => &data[..],
         })
         .flatten()

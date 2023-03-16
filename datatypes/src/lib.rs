@@ -3,6 +3,11 @@ use serde::{
     Deserialize,
 };
 use mpi::traits::Equivalence;
+use iovec::{
+    ChunkSerDe,
+    Chunk,
+};
+use memoffset::offset_of;
 
 mod datatype;
 pub use datatype::DataType;
@@ -41,6 +46,27 @@ pub fn complex_noncompound(size: usize) -> Vec<ComplexNoncompound> {
         .collect()
 }
 
+impl ChunkSerDe for ComplexNoncompound {
+    fn serialize(&self, chunks: &mut Vec<Chunk>) {
+        unsafe {
+            let ptr = std::ptr::addr_of!(self) as *const u8;
+            let slice = std::slice::from_raw_parts(
+                ptr,
+                std::mem::size_of::<ComplexNoncompound>(),
+            );
+            chunks.push(Chunk::Slice(slice));
+        }
+    }
+
+    fn deserialize(data: &[u8]) -> Self {
+        unsafe {
+            assert_eq!(data.len(), std::mem::size_of::<ComplexNoncompound>());
+            let ptr = data.as_ptr() as *const ComplexNoncompound;
+            ptr.read_unaligned()
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ComplexCompound {
     m: i32,
@@ -68,4 +94,51 @@ pub fn complex_compound(size: usize) -> Vec<ComplexCompound> {
         total_size += next_size;
     }
     out
+}
+
+impl ChunkSerDe for ComplexCompound {
+    fn serialize(&self, chunks: &mut Vec<Chunk>) {
+        unsafe {
+            let ptr = std::ptr::addr_of!(self) as *const u8;
+            let slice = std::slice::from_raw_parts(
+                ptr,
+                std::mem::size_of::<ComplexCompound>(),
+            );
+            chunks.push(Chunk::Slice(slice));
+            let len = self.data.len().to_be_bytes().to_vec();
+            chunks.push(Chunk::Data(len));
+            let slice = std::slice::from_raw_parts(
+                self.data.as_ptr() as *const _,
+                self.data.len() * std::mem::size_of::<i32>(),
+            );
+            chunks.push(Chunk::Slice(slice));
+        }
+    }
+
+    fn deserialize(data: &[u8]) -> Self {
+        unsafe {
+            let ptr = data.as_ptr();
+            let off = offset_of!(ComplexCompound, m);
+            let m = (ptr.offset(off.try_into().unwrap()) as *const i32).read_unaligned();
+            let off = offset_of!(ComplexCompound, n);
+            let n = (ptr.offset(off.try_into().unwrap()) as *const i32).read_unaligned();
+            let ptr = ptr.offset(std::mem::size_of::<ComplexCompound>().try_into().unwrap());
+            let len_bytes = std::slice::from_raw_parts(
+                ptr,
+                std::mem::size_of::<usize>(),
+            );
+            let len = usize::from_be_bytes(len_bytes.try_into().unwrap());
+            let mut ptr = ptr.offset(std::mem::size_of::<usize>().try_into().unwrap()) as *const i32;
+            let mut data = Vec::new();
+            for _ in 0..len {
+                data.push(ptr.read_unaligned());
+                ptr = ptr.offset(1);
+            }
+            ComplexCompound {
+                m,
+                n,
+                data,
+            }
+        }
+    }
 }

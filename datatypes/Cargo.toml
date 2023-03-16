@@ -6,3 +6,5 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0.152", features = ["derive"] }
 mpi = { version = "0.6.0", features = ["derive"] }
+iovec = { path = "../iovec" }
+memoffset = "0.8.0"
