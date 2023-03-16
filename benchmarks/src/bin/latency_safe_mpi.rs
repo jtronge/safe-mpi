@@ -1,16 +1,12 @@
 use std::net::SocketAddr;
-use std::time::Instant;
 use clap::Parser;
 use serde::{Serialize, de::DeserializeOwned};
-use safe_mpi::{
-    self,
-    communicator::Communicator,
-};
+use safe_mpi;
 use benchmarks::{
     latency,
     LatencyOptions,
     Args,
-    Kind,
+    SerKind,
     data_controllers::{
         SerdeController,
         BincodeController,
@@ -18,10 +14,6 @@ use benchmarks::{
         PostcardController,
     },
 };
-
-const ITERATIONS: usize = 512;
-const SKIP: usize = 16;
-const WARMUP_VALIDATION: usize = 8;
 
 fn serde_latency<T, P, S>(opts: LatencyOptions, rank: isize, comm: S, prepare: P) -> Vec<(usize, f32)>
 where
@@ -51,34 +43,29 @@ fn benchmark(args: Args, opts: LatencyOptions) -> Vec<(usize, f32)> {
     let world = sm.world();
 
     let rank = if args.server { 0 } else { 1 };
-    let prepare = datatypes::complex_noncompound;
+    let prepare = datatypes::simple;
     match args.kind {
-        Kind::MessagePack => {
+        SerKind::MessagePack => {
             let comm = MessagePackController::new(world);
             serde_latency(opts, rank, comm, prepare)
         }
-        Kind::Postcard => {
+        SerKind::Postcard => {
             let comm = PostcardController::new(world);
             serde_latency(opts, rank, comm, prepare)
         }
-        Kind::Bincode => {
+        SerKind::Bincode => {
             let comm = BincodeController::new(world);
             serde_latency(opts, rank, comm, prepare)
+        }
+        SerKind::IoVec => {
+            panic!("Not implemented");
         }
     }
 }
 
 fn main() {
-    let opts = LatencyOptions {
-        iterations: ITERATIONS,
-        skip: SKIP,
-        warmup_validation: WARMUP_VALIDATION,
-        min_size: 2,
-        max_size: 512,
-        // rank: if args.server { 0 } else { 1 },
-    };
-
     let args = Args::parse();
+    let opts = benchmarks::load_config(&args.config).unwrap();
     let results = benchmark(args, opts);
 
     for (size, lat) in results {

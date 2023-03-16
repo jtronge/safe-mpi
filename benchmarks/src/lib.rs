@@ -25,14 +25,27 @@ pub struct Args {
     pub server: bool,
     /// Which kind of benchmark to run
     #[arg(value_enum)]
-    pub kind: Kind,
+    pub kind: SerKind,
+    /// Config path
+    #[arg(short, long)]
+    pub config: String,
 }
 
+#[derive(Parser)]
+#[command(author)]
+pub struct RsmpiArgs {
+    /// Config path
+    #[arg(short, long)]
+    pub config: String,
+}
+
+/// Serialization kind for the ucx-based version.
 #[derive(Clone, Debug, ValueEnum)]
-pub enum Kind {
+pub enum SerKind {
     MessagePack,
     Postcard,
     Bincode,
+    IoVec,
 }
 
 #[derive(Copy, Clone, Debug)]
