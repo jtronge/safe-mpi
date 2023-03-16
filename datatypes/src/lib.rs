@@ -1,5 +1,11 @@
-use serde::{Serialize, Deserialize};
+use serde::{
+    Serialize,
+    Deserialize,
+};
 use mpi::traits::Equivalence;
+
+mod datatype;
+pub use datatype::DataType;
 
 /// Generate a vector of a simple type of the given size (roughly).
 pub fn simple(size: usize) -> Vec<i32> {

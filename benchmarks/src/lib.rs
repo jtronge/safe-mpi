@@ -19,12 +19,13 @@ pub struct Args {
     /// IPv4 address of other process
     pub address: Ipv4Addr,
     /// TCP port of other process
+    #[arg(short, long)]
     pub port: u16,
     /// Is this the server process?
     #[arg(short, long)]
     pub server: bool,
     /// Which kind of benchmark to run
-    #[arg(value_enum)]
+    #[arg(value_enum, short, long)]
     pub kind: SerKind,
     /// Config path
     #[arg(short, long)]

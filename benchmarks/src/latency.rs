@@ -1,5 +1,6 @@
 use std::time::Instant;
 use serde::Deserialize;
+use datatypes::DataType;
 
 #[derive(Debug, Deserialize)]
 pub struct LatencyOptions {
@@ -8,6 +9,7 @@ pub struct LatencyOptions {
     pub warmup_validation: usize,
     pub min_size: usize,
     pub max_size: usize,
+    pub datatype: DataType,
 }
 
 /// Generic latency benchmark function.
