@@ -5,7 +5,7 @@ use safe_mpi::{
 };
 use serde::{Serialize, Deserialize};
 use nalgebra::Matrix3;
-use benchmarks::Args;
+use benchmarks::SerdeArgs;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct TestData {
@@ -19,7 +19,7 @@ const SKIP: usize = 128;
 const WARMUP_VALIDATION: usize = 16;
 
 fn main() {
-    let args = Args::parse();
+    let args = SerdeArgs::parse();
     let sockaddr = SocketAddr::from((args.address.octets(), args.port));
     let sm = safe_mpi::init(sockaddr, args.server)
         .expect("Failed to initialize safe_mpi");

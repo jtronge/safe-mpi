@@ -1,0 +1,6 @@
+iterations: 128
+skip: 16
+warmup_validation: 10
+min_size: 2
+max_size: 8192
+datatype: simple

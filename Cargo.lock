@@ -53,6 +53,7 @@ dependencies = [
  "bincode",
  "clap 4.1.4",
  "datatypes",
+ "iovec",
  "mpi",
  "nalgebra",
  "postcard",

@@ -5,7 +5,7 @@ use safe_mpi;
 use benchmarks::{
     latency,
     LatencyOptions,
-    Args,
+    SerdeArgs,
     SerKind,
     data_controllers::{
         SerdeController,
@@ -40,7 +40,7 @@ where
     )
 }
 
-fn benchmark<T, P>(args: Args, opts: LatencyOptions, prepare: P) -> Vec<(usize, f32)>
+fn benchmark<T, P>(args: SerdeArgs, opts: LatencyOptions, prepare: P) -> Vec<(usize, f32)>
 where
     T: Serialize + DeserializeOwned,
     P: Fn(usize) -> Vec<T>,
@@ -64,14 +64,11 @@ where
             let comm = BincodeController::new(world);
             serde_latency(opts, rank, comm, prepare)
         }
-        SerKind::IoVec => {
-            panic!("Not implemented");
-        }
     }
 }
 
 fn main() {
-    let args = Args::parse();
+    let args = SerdeArgs::parse();
     let opts: LatencyOptions = benchmarks::load_config(&args.config).unwrap();
 
     let results = match opts.datatype {

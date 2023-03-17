@@ -1,6 +1,6 @@
 use std::slice::from_raw_parts;
 use ucx2_sys::ucp_dt_iov;
-use iovec::{Chunk, ChunkSerDe};
+use iovec::{Chunk, ChunkSerDe, Result};
 
 #[derive(Debug)]
 struct A {
@@ -10,7 +10,7 @@ struct A {
 }
 
 impl ChunkSerDe for A {
-    fn serialize(&self, chunks: &mut Vec<Chunk>) {
+    fn serialize(&self, chunks: &mut Vec<Chunk>) -> Result<()> {
         unsafe {
             chunks.push(Chunk::Slice(from_raw_parts(std::ptr::addr_of!(self.x) as *const _, std::mem::size_of::<u32>())));
             chunks.push(Chunk::Slice(from_raw_parts(self.y.as_ptr() as *const _, self.y.len() * std::mem::size_of::<f64>())));
@@ -19,10 +19,11 @@ impl ChunkSerDe for A {
             chunks.push(Chunk::Data(len));
             // Now the data
             chunks.push(Chunk::Slice(from_raw_parts(self.data.as_ptr() as *const _, self.data.len() * std::mem::size_of::<f64>())));
+            Ok(())
         }
     }
 
-    fn deserialize(data: &[u8]) -> Self {
+    fn deserialize(data: &[u8]) -> Result<(Self, usize)> {
         unsafe {
             let ptr = data.as_ptr() as *const u32;
             let x = ptr.read_unaligned();
@@ -38,11 +39,15 @@ impl ChunkSerDe for A {
                 data.push(ptr.read_unaligned());
                 ptr = ptr.offset(1);
             }
-            Self {
-                x,
-                y,
-                data,
-            }
+            let len = data.len();
+            Ok((
+                Self {
+                    x,
+                    y,
+                    data,
+                },
+                len,
+            ))
         }
     }
 }
@@ -55,7 +60,7 @@ fn main() {
     };
 
     let mut chunks = vec![];
-    a.serialize(&mut chunks);
+    a.serialize(&mut chunks).unwrap();
     println!("chunks = {:?}", chunks);
     let iovecs: Vec<ucp_dt_iov> = chunks
         .iter()
@@ -80,6 +85,6 @@ fn main() {
         .flatten()
         .map(|i| *i)
         .collect();
-    let new_a = A::deserialize(&data);
+    let (new_a, _) = A::deserialize(&data).unwrap();
     println!("new_a = {:?}", new_a);
 }

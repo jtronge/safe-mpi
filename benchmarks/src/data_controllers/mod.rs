@@ -6,3 +6,5 @@ mod postcard;
 pub use self::postcard::PostcardController;
 mod serde;
 pub use self::serde::SerdeController;
+mod iovec;
+pub use self::iovec::IovecController;

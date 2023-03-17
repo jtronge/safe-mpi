@@ -6,6 +6,7 @@ use mpi::traits::Equivalence;
 use iovec::{
     ChunkSerDe,
     Chunk,
+    Result,
 };
 use memoffset::offset_of;
 
@@ -47,7 +48,7 @@ pub fn complex_noncompound(size: usize) -> Vec<ComplexNoncompound> {
 }
 
 impl ChunkSerDe for ComplexNoncompound {
-    fn serialize(&self, chunks: &mut Vec<Chunk>) {
+    fn serialize(&self, chunks: &mut Vec<Chunk>) -> Result<()> {
         unsafe {
             let ptr = std::ptr::addr_of!(self) as *const u8;
             let slice = std::slice::from_raw_parts(
@@ -55,14 +56,18 @@ impl ChunkSerDe for ComplexNoncompound {
                 std::mem::size_of::<ComplexNoncompound>(),
             );
             chunks.push(Chunk::Slice(slice));
+            Ok(())
         }
     }
 
-    fn deserialize(data: &[u8]) -> Self {
+    fn deserialize(data: &[u8]) -> Result<(Self, usize)> {
         unsafe {
-            assert_eq!(data.len(), std::mem::size_of::<ComplexNoncompound>());
+            assert!(data.len() >= std::mem::size_of::<ComplexNoncompound>());
             let ptr = data.as_ptr() as *const ComplexNoncompound;
-            ptr.read_unaligned()
+            Ok((
+                ptr.read_unaligned(),
+                std::mem::size_of::<ComplexNoncompound>(),
+            ))
         }
     }
 }
@@ -97,7 +102,7 @@ pub fn complex_compound(size: usize) -> Vec<ComplexCompound> {
 }
 
 impl ChunkSerDe for ComplexCompound {
-    fn serialize(&self, chunks: &mut Vec<Chunk>) {
+    fn serialize(&self, chunks: &mut Vec<Chunk>) -> Result<()> {
         unsafe {
             let ptr = std::ptr::addr_of!(self) as *const u8;
             let slice = std::slice::from_raw_parts(
@@ -112,10 +117,11 @@ impl ChunkSerDe for ComplexCompound {
                 self.data.len() * std::mem::size_of::<i32>(),
             );
             chunks.push(Chunk::Slice(slice));
+            Ok(())
         }
     }
 
-    fn deserialize(data: &[u8]) -> Self {
+    fn deserialize(data: &[u8]) -> Result<(Self, usize)> {
         unsafe {
             let ptr = data.as_ptr();
             let off = offset_of!(ComplexCompound, m);
@@ -134,11 +140,17 @@ impl ChunkSerDe for ComplexCompound {
                 data.push(ptr.read_unaligned());
                 ptr = ptr.offset(1);
             }
-            ComplexCompound {
-                m,
-                n,
-                data,
-            }
+            let size = std::mem::size_of::<ComplexCompound>()
+                       + std::mem::size_of::<usize>()
+                       + std::mem::size_of::<i32>() * len;
+            Ok((
+                ComplexCompound {
+                    m,
+                    n,
+                    data,
+                },
+                size,
+            ))
         }
     }
 }

@@ -5,20 +5,22 @@ use std::os::raw::c_void;
 use serde::{Serialize, de::DeserializeOwned};
 use ucx2_sys::{
     rust_ucp_dt_make_contig,
-    ucs_status_t,
-    ucp_worker_h,
-    ucp_worker_progress,
-    ucp_worker_wait,
+    ucp_dt_iov,
     ucp_ep_close_nb,
     ucp_ep_h,
     ucp_request_free,
-    ucp_tag_msg_recv_nbx,
     ucp_request_param_t,
+    ucs_status_t,
+    ucp_tag_msg_recv_nbx,
     ucp_tag_recv_info_t,
     ucp_tag_recv_nbx,
     ucp_tag_probe_nb,
     ucp_tag_send_nbx,
     ucp_tag_t,
+    ucp_worker_h,
+    ucp_worker_progress,
+    ucp_worker_wait,
+    UCP_DATATYPE_IOV,
     UCP_EP_CLOSE_MODE_FLUSH,
     UCP_OP_ATTR_FIELD_DATATYPE,
     UCP_OP_ATTR_FIELD_CALLBACK,
@@ -44,13 +46,37 @@ pub struct Communicator {
     handle: Rc<RefCell<Handle>>,
 }
 
-pub fn send(worker: ucp_worker_h, endpoint: ucp_ep_h, tag: Tag, buf: &[u8]) -> Result<usize> {
+pub fn send(worker: ucp_worker_h, endpoint: ucp_ep_h, tag: Tag, data: Data) -> Result<usize> {
     unsafe {
+        let (ptr, len, total, datatype, _iov) = match &data {
+            Data::Contiguous(buf) => (
+                buf.as_ptr() as *const _,
+                buf.len(),
+                buf.len(),
+                rust_ucp_dt_make_contig(1).try_into().unwrap(),
+                vec![],
+            ),
+            Data::Chunked(chunks) => {
+                let datatype = UCP_DATATYPE_IOV.try_into().unwrap();
+                let mut total = 0;
+                let iov: Vec<ucp_dt_iov> = chunks
+                    .iter()
+                    .map(|slice| {
+                        total += slice.len();
+                        ucp_dt_iov {
+                            buffer: slice.as_ptr() as *mut _,
+                            length: slice.len(),
+                        }
+                    })
+                    .collect();
+                (iov.as_ptr() as *const _, chunks.len(), total, datatype, iov)
+            }
+        };
         let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
         param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE
                              | UCP_OP_ATTR_FIELD_CALLBACK
                              | UCP_OP_ATTR_FIELD_USER_DATA;
-        param.datatype = rust_ucp_dt_make_contig(1).try_into().unwrap();
+        param.datatype = datatype;
         param.cb.send = Some(send_nbx_callback);
         // Callback info
         let cb_info: *mut bool = Box::into_raw(Box::new(false));
@@ -58,15 +84,15 @@ pub fn send(worker: ucp_worker_h, endpoint: ucp_ep_h, tag: Tag, buf: &[u8]) -> R
 
         let req = ucp_tag_send_nbx(
             endpoint,
-            buf.as_ptr() as *const _,
-            buf.len(),
+            ptr,
+            len,
             tag,
             &param,
         );
         wait_loop(worker, req, || *cb_info).unwrap();
 
         let _ = Box::from_raw(cb_info);
-        Ok(buf.len())
+        Ok(total)
     }
 }
 
@@ -106,12 +132,7 @@ impl Communicator {
     pub fn send(&self, data: Data, tag: Tag) -> Result<usize> {
         let worker = self.handle.borrow().worker;
         let endpoint = self.handle.borrow().endpoint.unwrap();
-        match data {
-            Data::Contiguous(buf) => {
-                send(worker, endpoint, tag, buf)
-            }
-            _ => panic!("not implemented"),
-        }
+        send(worker, endpoint, tag, data)
     }
 
     pub fn recv(&self, tag: Tag) -> Result<Vec<u8>> {

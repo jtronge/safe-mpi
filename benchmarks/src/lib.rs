@@ -13,9 +13,10 @@ pub use latency::{
     LatencyOptions,
 };
 
+/// Arguments for the serde benchmarks
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
-pub struct Args {
+pub struct SerdeArgs {
     /// IPv4 address of other process
     pub address: Ipv4Addr,
     /// TCP port of other process
@@ -32,6 +33,24 @@ pub struct Args {
     pub config: String,
 }
 
+/// Arguments for the iovec benchmarks
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+pub struct IovecArgs {
+    /// IpV4 address of other process
+    pub address: Ipv4Addr,
+    /// Port of other process
+    #[arg(short, long)]
+    pub port: u16,
+    /// Will this run as a server process?
+    #[arg(short, long)]
+    pub server: bool,
+    /// Config path
+    #[arg(short, long)]
+    pub config: String,
+}
+
+/// Arguments for the rsmpi benchmarks
 #[derive(Parser)]
 #[command(author)]
 pub struct RsmpiArgs {
@@ -46,7 +65,6 @@ pub enum SerKind {
     MessagePack,
     Postcard,
     Bincode,
-    IoVec,
 }
 
 #[derive(Copy, Clone, Debug)]
