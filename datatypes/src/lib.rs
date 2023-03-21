@@ -83,7 +83,7 @@ pub fn complex_compound(size: usize) -> Vec<ComplexCompound> {
     let mut total_size = 0;
     let mut out = vec![];
     for i in 0..size {
-        let len = if (i % 2) == 0 { 128 } else { 256 };
+        let len = 256;
         // Estimate of the amount of memory for this item
         let next_size = std::mem::size_of::<ComplexCompound>() + std::mem::size_of::<i32>() * len;
         // Check if this next size will be too big
