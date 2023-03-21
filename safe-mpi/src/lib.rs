@@ -17,7 +17,8 @@ use ucx2_sys::{
     UCP_WORKER_PARAM_FIELD_THREAD_MODE,
     ucs_status_t,
     ucs_status_string,
-    UCP_EP_CLOSE_MODE_FLUSH,
+    // UCP_EP_CLOSE_MODE_FLUSH,
+    UCP_EP_CLOSE_MODE_FORCE,
     UCP_FEATURE_TAG,
     UCP_FEATURE_STREAM,
     UCP_PARAM_FIELD_FEATURES,
@@ -57,6 +58,8 @@ pub enum Error {
     WorkerWait(ucs_status_t),
     DeserializeError,
     SerializeError,
+    /// Timeout occured while waiting on a request
+    RequestTimeout,
 }
 
 /// Handle containing the internal UCP context data and other code.
@@ -71,7 +74,10 @@ impl Drop for Handle {
     fn drop(&mut self) {
         unsafe {
             if let Some(endpoint) = self.endpoint {
-                let req = ucp_ep_close_nb(endpoint, UCP_EP_CLOSE_MODE_FLUSH);
+                // For some reason UCP_EP_CLOSE_MODE_FLUSH is causing an
+                // infinite loop with two nodes
+                // let req = ucp_ep_close_nb(endpoint, UCP_EP_CLOSE_MODE_FLUSH);
+                let req = ucp_ep_close_nb(endpoint, UCP_EP_CLOSE_MODE_FORCE);
                 wait_loop(self.worker, req, || false).unwrap();
             }
             ucp_worker_destroy(self.worker);

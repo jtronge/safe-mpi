@@ -12,6 +12,8 @@ use ucx2_sys::{
 };
 use crate::{Result, Error};
 
+const TIMEOUT: usize = 8192;
+
 /// Wait for the request to complete
 pub(crate) unsafe fn wait_loop<F>(worker: ucp_worker_h, req: *mut c_void, f: F) -> Result<()>
 where
@@ -31,6 +33,7 @@ where
         panic!("Failed to send data");
     }
 
+    let mut i = 0;
     while !f() {
         info!("Waiting for request completion");
         for _ in 0..512 {
@@ -44,6 +47,10 @@ where
             }
             break;
         }
+        if i > TIMEOUT {
+            return Err(Error::RequestTimeout);
+        }
+        i += 1;
     }
 
     ucp_request_free(req);

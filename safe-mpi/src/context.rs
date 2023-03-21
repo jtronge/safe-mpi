@@ -19,7 +19,9 @@ use ucx2_sys::{
     ucp_address_t,
     UCP_WORKER_PARAM_FIELD_THREAD_MODE,
     UCS_THREAD_MODE_SINGLE,
+    UCP_ERR_HANDLING_MODE_PEER,
     UCP_EP_PARAM_FIELD_REMOTE_ADDRESS,
+    UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE,
     UCS_OK,
 };
 use crate::Handle;
@@ -44,7 +46,10 @@ impl Context {
             // Now create the single endpoint (this will change for multiple processes)
             let mut endpoint = MaybeUninit::<ucp_ep_h>::uninit();
             let mut params = MaybeUninit::<ucp_ep_params_t>::uninit().assume_init();
-            params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS.into();
+            let field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS
+                             | UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE;
+            params.field_mask = field_mask.into();
+            params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
             params.address = self.handle.borrow().other_addr.as_ptr() as *const _;
             let status = ucp_ep_create(self.handle.borrow().worker, &params, endpoint.as_mut_ptr());
             if status != UCS_OK {

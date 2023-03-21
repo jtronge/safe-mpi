@@ -24,7 +24,7 @@ where
         rank,
         prepare,
         |s_buf| {
-            world.send(s_buf, 0).unwrap();
+            let size = world.send(s_buf, 0).unwrap();
             let _data: T = world.recv(0).unwrap();
         },
         |s_buf| {
