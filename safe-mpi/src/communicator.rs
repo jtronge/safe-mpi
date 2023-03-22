@@ -167,6 +167,40 @@ impl Communicator {
             Ok(buf)
         }
     }
+
+    pub fn isend<'a>(&self, data: Data<'a>, tag: Tag) -> Result<Request<'a>> {
+        Ok(Request {
+            complete: false,
+            req: std::ptr::null_mut(),
+            handle: Rc::clone(&self.handle),
+            data: Some(data),
+        })
+    }
+
+    pub fn irecv(&self, tag: Tag) -> Result<Request> {
+        Ok(Request {
+            complete: false,
+            req: std::ptr::null_mut(),
+            handle: Rc::clone(&self.handle),
+            data: None,
+        })
+    }
+}
+
+pub struct Request<'a> {
+    complete: bool,
+    req: *mut c_void,
+    handle: Rc<RefCell<Handle>>,
+    data: Option<Data<'a>>,
+}
+
+impl<'a> Request<'a> {
+/*
+    pub fn wait() -> {
+        let worker = self.handle.borrow().worker;
+        wait_loop(worker, req, || complete).unwrap();
+    }
+*/
 }
 
 pub enum Data<'a> {
