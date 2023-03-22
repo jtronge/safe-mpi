@@ -47,7 +47,7 @@ def serde_test(kind):
             output=f'{prefix}_server.out',
             node=node,
         )
-        time.sleep(2)
+        time.sleep(8)
         client = start_job(
             cmd=serde_command(kind=kind, server_node=node,
                               config=config),
@@ -70,7 +70,7 @@ def iovec_test(run, config, prefix, node):
         output=f'{prefix}_server.out',
         node=node,
     )
-    time.sleep(2)
+    time.sleep(8)
     client = start_job(
         cmd=cmd,
         script=f'{prefix}_client.sh',
@@ -122,4 +122,4 @@ for config, tests in configs.items():
             print('test run', run)
             prefix = os.path.join(args.output, f'{config_prefix}_{test_name}_{run}')
             test(run, config, prefix, args.node)
-            time.sleep(2)
+            time.sleep(8)
