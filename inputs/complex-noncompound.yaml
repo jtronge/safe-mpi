@@ -1,6 +1,6 @@
 iterations: 128
 skip: 16
 warmup_validation: 10
-min_size: 128
-max_size: 8192
+min_size: 2048
+max_size: 65536
 datatype: complex-noncompound
