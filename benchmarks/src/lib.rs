@@ -12,6 +12,11 @@ pub use latency::{
     latency,
     LatencyOptions,
 };
+mod bw;
+pub use bw::{
+    bw,
+    BandwidthOptions,
+};
 
 /// Arguments for the serde benchmarks
 #[derive(Parser)]

@@ -19,7 +19,7 @@ pub fn simple(size: usize) -> Vec<i32> {
     (0..count.try_into().unwrap()).collect()
 }
 
-#[derive(Serialize, Deserialize, Equivalence)]
+#[derive(Serialize, Deserialize, Equivalence, Default)]
 pub struct ComplexNoncompound {
     i: i32,
     d: f64,

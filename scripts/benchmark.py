@@ -88,21 +88,21 @@ def rsmpi_test(run, config, prefix, node):
 
 # client_node = 'er02'
 configs = {
-    './inputs/simple.yaml': {
+    './params/latency/simple.yaml': {
         'message-pack': serde_test('message-pack'),
         'postcard': serde_test('postcard'),
         'bincode': serde_test('bincode'),
         'iovec': iovec_test,
         'rsmpi': rsmpi_test,
     },
-    './inputs/complex-noncompound.yaml': {
+    './params/latency/complex-noncompound.yaml': {
         'message-pack': serde_test('message-pack'),
         'postcard': serde_test('postcard'),
         'bincode': serde_test('bincode'),
         'iovec': iovec_test,
         'rsmpi': rsmpi_test,
     },
-    './inputs/complex-compound.yaml': {
+    './params/latency/complex-compound.yaml': {
         'message-pack': serde_test('message-pack'),
         'postcard': serde_test('postcard'),
         'bincode': serde_test('bincode'),

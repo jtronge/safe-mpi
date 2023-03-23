@@ -19,7 +19,7 @@ use datatypes::{
     DataType,
 };
 
-fn serde_latency<T, P, S>(opts: LatencyOptions, rank: isize, comm: S, prepare: P) -> Vec<(usize, f32)>
+fn serde_latency<T, P, S>(opts: LatencyOptions, rank: usize, comm: S, prepare: P) -> Vec<(usize, f32)>
 where
     T: Serialize + DeserializeOwned,
     P: Fn(usize) -> Vec<T>,

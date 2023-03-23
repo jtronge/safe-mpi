@@ -41,8 +41,6 @@ where
                 .send(&s_buf[..]);
         },
     )
-    // TODO
-    // vec![]
 }
 
 fn main() {

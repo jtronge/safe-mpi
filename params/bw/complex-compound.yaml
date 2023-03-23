@@ -1,0 +1,7 @@
+iterations: 128
+skip: 16
+warmup_validation: 10
+min_size: 128
+max_size: 131072
+window_size: 64
+datatype: complex-compound

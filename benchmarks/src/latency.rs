@@ -1,3 +1,4 @@
+//! Latency benchmark code
 use std::time::Instant;
 use serde::Deserialize;
 use datatypes::DataType;
@@ -12,14 +13,17 @@ pub struct LatencyOptions {
     pub datatype: DataType,
 }
 
-/// Generic latency benchmark function.
+/// Generic latency benchmark function. Returns a vec of pairs of the form
+/// (size, microseconds).
 ///
 /// The `prepare` callback is used to prepare data for an iteration. The
 /// `body0` and `body1` callbacks are called on rank 0 and 1 of the
 /// communicator respectively.
+///
+/// Based on the OSU microbenchmarks version for MPI.
 pub fn latency<T, P, B0, B1>(
     opts: LatencyOptions,
-    rank: isize,
+    rank: usize,
     prepare: P,
     body0: B0,
     body1: B1,
@@ -33,6 +37,7 @@ where
     let mut size = opts.min_size;
     while size <= opts.max_size {
         let mut total_time = 0.0;
+        // Prepare the send buffer
         let data = prepare(size);
         for i in 0..opts.iterations + opts.skip {
             if rank == 0 {
