@@ -26,6 +26,18 @@ where
     P: Fn(usize) -> Vec<T>,
     S: SerdeController,
 {
+/*
+    benchmarks::bw(
+        opts,
+        rank,
+        prepare,
+        |rank, window_size, sbuf| {
+            if rank == 0 {
+            } else {
+            }
+        }
+    )
+*/
     vec![]
 }
 

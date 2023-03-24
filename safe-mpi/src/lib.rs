@@ -48,6 +48,8 @@ use context::Context;
 mod util;
 use util::wait_loop;
 mod callbacks;
+mod request;
+pub use request::{Request, RequestStatus};
 
 #[derive(Debug, Copy, Clone)]
 pub enum Error {
