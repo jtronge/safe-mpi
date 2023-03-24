@@ -60,6 +60,7 @@ pub enum Error {
     SerializeError,
     /// Timeout occured while waiting on a request
     RequestTimeout,
+    InternalError,
 }
 
 /// Handle containing the internal UCP context data and other code.

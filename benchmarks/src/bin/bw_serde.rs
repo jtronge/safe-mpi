@@ -1,11 +1,9 @@
 use std::net::SocketAddr;
 use clap::Parser;
 use serde::{Serialize, de::DeserializeOwned};
-use safe_mpi;
 use benchmarks::{
-    latency,
-    LatencyOptions,
     SerdeArgs,
+    BandwidthOptions,
     SerKind,
     data_controllers::{
         SerdeController,
@@ -15,9 +13,10 @@ use benchmarks::{
     },
 };
 use datatypes::DataType;
+use safe_mpi;
 
-fn serde_latency<T, P, S>(
-    opts: LatencyOptions,
+fn serde_bw<T, P, S>(
+    opts: BandwidthOptions,
     rank: usize,
     comm: S,
     prepare: P,
@@ -27,22 +26,10 @@ where
     P: Fn(usize) -> Vec<T>,
     S: SerdeController,
 {
-    benchmarks::latency(
-        opts,
-        rank,
-        prepare,
-        |s_buf| {
-            comm.send(s_buf, 0).unwrap();
-            let _data: Vec<T> = comm.recv(0).unwrap();
-        },
-        |s_buf| {
-            let _data: Vec<T> = comm.recv(0).unwrap();
-            comm.send(s_buf, 0).unwrap();
-        },
-    )
+    vec![]
 }
 
-fn benchmark<T, P>(args: SerdeArgs, opts: LatencyOptions, prepare: P) -> Vec<(usize, f32)>
+fn benchmark<T, P>(args: SerdeArgs, opts: BandwidthOptions, prepare: P) -> Vec<(usize, f32)>
 where
     T: Serialize + DeserializeOwned,
     P: Fn(usize) -> Vec<T>,
@@ -56,22 +43,22 @@ where
     match args.kind {
         SerKind::MessagePack => {
             let comm = MessagePackController::new(world);
-            serde_latency(opts, rank, comm, prepare)
+            serde_bw(opts, rank, comm, prepare)
         }
         SerKind::Postcard => {
             let comm = PostcardController::new(world);
-            serde_latency(opts, rank, comm, prepare)
+            serde_bw(opts, rank, comm, prepare)
         }
         SerKind::Bincode => {
             let comm = BincodeController::new(world);
-            serde_latency(opts, rank, comm, prepare)
+            serde_bw(opts, rank, comm, prepare)
         }
     }
 }
 
 fn main() {
     let args = SerdeArgs::parse();
-    let opts: LatencyOptions = benchmarks::load_config(&args.config).unwrap();
+    let opts: BandwidthOptions = benchmarks::load_config(&args.config).unwrap();
 
     let results = match opts.datatype {
         DataType::Simple => benchmark(args, opts, datatypes::simple),
@@ -79,7 +66,7 @@ fn main() {
         DataType::ComplexCompound => benchmark(args, opts, datatypes::complex_compound),
     };
 
-    for (size, lat) in results {
-        println!("{} {}", size, lat);
+    for (size, bw) in results {
+        println!("{} {}", size, bw);
     }
 }

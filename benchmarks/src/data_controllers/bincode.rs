@@ -11,7 +11,7 @@ use safe_mpi::{
 use crate::data_controllers::SerdeController;
 
 pub struct BincodeController {
-    pub comm: Communicator,
+    comm: Communicator,
 }
 
 impl BincodeController {
