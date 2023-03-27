@@ -6,6 +6,7 @@ use benchmarks::{
     BandwidthOptions,
     SerKind,
     data_controllers::{
+        SerdeScope,
         SerdeController,
         BincodeController,
         MessagePackController,
@@ -26,19 +27,36 @@ where
     P: Fn(usize) -> Vec<T>,
     S: SerdeController,
 {
-/*
+
     benchmarks::bw(
         opts,
         rank,
         prepare,
         |rank, window_size, sbuf| {
+            comm.scope(|scope| {
+                let mut reqs = vec![];
+                if rank == 0 {
+                    for j in 0..window_size {
+                        reqs.push(scope.isend(sbuf, 0).unwrap());
+                    }
+                } else {
+                    for j in 0..window_size {
+                        reqs.push(scope.irecv(0).unwrap());
+                    }
+                }
+                scope.wait_all(&reqs[..]);
+                // Extract/deserialize any data
+                for req in reqs {
+                    let _ = scope.data::<T>(req);
+                }
+            });
             if rank == 0 {
+                let _ = comm.recv::<Vec<usize>>(0);
             } else {
+                comm.send(&[0], 0);
             }
-        }
+        },
     )
-*/
-    vec![]
 }
 
 fn benchmark<T, P>(args: SerdeArgs, opts: BandwidthOptions, prepare: P) -> Vec<(usize, f32)>

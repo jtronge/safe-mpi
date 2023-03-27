@@ -47,9 +47,9 @@ impl SerdeController for PostcardController {
 
     fn scope<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&Self::Scope) -> R,
+        F: FnOnce(&mut Self::Scope) -> R,
     {
-        f(&PostcardScope)
+        f(&mut PostcardScope)
     }
 }
 

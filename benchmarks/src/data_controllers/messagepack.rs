@@ -47,9 +47,9 @@ impl SerdeController for MessagePackController {
 
     fn scope<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&Self::Scope) -> R,
+        F: FnOnce(&mut Self::Scope) -> R,
     {
-        f(&MessagePackScope)
+        f(&mut MessagePackScope)
     }
 }
 

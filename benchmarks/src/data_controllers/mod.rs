@@ -7,4 +7,4 @@ pub use self::postcard::PostcardController;
 mod iovec;
 pub use self::iovec::IovecController;
 mod serde;
-pub use self::serde::SerdeController;
+pub use self::serde::{SerdeController, SerdeScope};

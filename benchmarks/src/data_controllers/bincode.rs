@@ -49,9 +49,9 @@ impl SerdeController for BincodeController {
 
     fn scope<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&Self::Scope) -> R
+        F: FnOnce(&mut Self::Scope) -> R,
     {
-        f(&BincodeScope {
+        f(&mut BincodeScope {
             comm: self.comm.dup(),
             requests: vec![],
         })
@@ -93,8 +93,7 @@ impl SerdeScope for BincodeScope {
         }
     }
 
-    fn irecv(&mut self, tag: Tag) -> Result<Self::Request>
-    {
+    fn irecv(&mut self, tag: Tag) -> Result<Self::Request> {
         let i = self.requests.len();
         let req = self.comm.irecv(tag)?;
         let req: Box<Box<dyn SRequest>> = Box::new(Box::new(req));
@@ -125,6 +124,24 @@ impl SerdeScope for BincodeScope {
             match (*rptr).data() {
                 Some(data) => bincode::deserialize(&data).ok(),
                 None => None,
+            }
+        }
+    }
+}
+
+impl Drop for BincodeScope {
+    fn drop(&mut self) {
+        unsafe {
+            let mut inprogress = 0;
+            for req in self.requests.iter() {
+                let rptr = req.rptr as *mut Box<dyn SRequest>;
+                match (*rptr).progress().unwrap() {
+                    RequestStatus::InProgress => inprogress += 1,
+                    RequestStatus::Complete => (),
+                }
+            }
+            if inprogress > 0 {
+                panic!("{} requests are still in progress", inprogress);
             }
         }
     }
