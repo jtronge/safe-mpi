@@ -11,7 +11,10 @@ use safe_mpi::{
         Data,
     },
 };
-use crate::data_controllers::serde::{SerdeController, SerdeScope, SerdeRequestStatus};
+use crate::data_controllers::{
+    Progress,
+    serde::{SerdeController, SerdeScope},
+};
 
 pub struct BincodeController {
     comm: Communicator,
@@ -69,9 +72,7 @@ pub struct BincodeScope {
 }
 
 impl SerdeScope for BincodeScope {
-    type Request = usize;
-
-    fn isend<T>(&mut self, data: &T, tag: Tag) -> Result<Self::Request>
+    fn isend<T>(&mut self, data: &T, tag: Tag) -> Result<usize>
     where
         T: Serialize + DeserializeOwned
     {
@@ -93,7 +94,7 @@ impl SerdeScope for BincodeScope {
         }
     }
 
-    fn irecv(&mut self, tag: Tag) -> Result<Self::Request> {
+    fn irecv(&mut self, tag: Tag) -> Result<usize> {
         let i = self.requests.len();
         let req = self.comm.irecv(tag)?;
         let req: Box<Box<dyn SRequest>> = Box::new(Box::new(req));
@@ -105,17 +106,7 @@ impl SerdeScope for BincodeScope {
         Ok(i)
     }
 
-    fn progress(&mut self, req: Self::Request) -> Result<SerdeRequestStatus> {
-        unsafe {
-            let rptr = self.requests[req].rptr as *mut Box<dyn SRequest>;
-            match (*rptr).progress()? {
-                RequestStatus::InProgress => Ok(SerdeRequestStatus::InProgress),
-                RequestStatus::Complete => Ok(SerdeRequestStatus::Complete),
-            }
-        }
-    }
-
-    fn data<T>(&self, req: Self::Request) -> Option<T>
+    fn data<T>(&self, req: usize) -> Option<T>
     where
         T: Serialize + DeserializeOwned,
     {
@@ -125,6 +116,17 @@ impl SerdeScope for BincodeScope {
                 Some(data) => bincode::deserialize(&data).ok(),
                 None => None,
             }
+        }
+    }
+}
+
+impl Progress for BincodeScope {
+    type Request = usize;
+
+    fn progress(&mut self, req: Self::Request) -> Result<RequestStatus> {
+        unsafe {
+            let rptr = self.requests[req].rptr as *mut Box<dyn SRequest>;
+            Ok((*rptr).progress()?)
         }
     }
 }

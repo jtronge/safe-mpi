@@ -42,9 +42,6 @@ where
                     for j in 0..window_size {
                         coll.add(proc.immediate_send(scope, &sbuf[..]));
                     }
-                    let mut stats = vec![];
-                    coll.wait_all(&mut stats);
-                    let (_, _): (Vec<usize>, _) = proc.receive_vec();
                 } else {
                     let mut tmp = &mut rbufs[..];
                     for j in 0..window_size {
@@ -56,11 +53,15 @@ where
                         );
                         coll.add(rreq);
                     }
-                    let mut stats = vec![];
-                    coll.wait_all(&mut stats);
-                    proc.send(&[0]);
                 }
+                let mut stats = vec![];
+                coll.wait_all(&mut stats);
             });
+            if rank == 0 {
+                let (_, _): (Vec<i32>, _) = proc.receive_vec();
+            } else {
+                proc.send(&[0i32]);
+            }
         },
     )
 }

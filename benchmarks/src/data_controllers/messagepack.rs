@@ -4,12 +4,16 @@ use safe_mpi::{
     Result,
     Error,
     Tag,
+    RequestStatus,
     communicator::{
         Communicator,
         Data,
     },
 };
-use crate::data_controllers::serde::{SerdeController, SerdeScope, SerdeRequestStatus};
+use crate::data_controllers::{
+    Progress,
+    serde::{SerdeController, SerdeScope},
+};
 
 pub struct MessagePackController {
     pub comm: Communicator,
@@ -56,25 +60,27 @@ impl SerdeController for MessagePackController {
 pub struct MessagePackScope;
 
 impl SerdeScope for MessagePackScope {
-    type Request = usize;
-
-    fn isend<T>(&mut self, data: &T, tag: Tag) -> Result<Self::Request>
+    fn isend<T>(&mut self, data: &T, tag: Tag) -> Result<usize>
     where
         T: Serialize + DeserializeOwned
     {
         Ok(0)
     }
 
-    fn irecv(&mut self, tag: Tag) -> Result<Self::Request>
+    fn irecv(&mut self, tag: Tag) -> Result<usize>
     {
         Ok(0)
     }
 
-    fn progress(&mut self, req: Self::Request) -> Result<SerdeRequestStatus> {
-        Ok(SerdeRequestStatus::InProgress)
-    }
-
-    fn data<T>(&self, req: Self::Request) -> Option<T> where T: Serialize + DeserializeOwned {
+    fn data<T>(&self, req: usize) -> Option<T> where T: Serialize + DeserializeOwned {
         None
+    }
+}
+
+impl Progress for MessagePackScope {
+    type Request = usize;
+
+    fn progress(&mut self, req: Self::Request) -> Result<RequestStatus> {
+        Ok(RequestStatus::InProgress)
     }
 }

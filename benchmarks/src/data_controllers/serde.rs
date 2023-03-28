@@ -6,6 +6,7 @@ use safe_mpi::{
     Result,
     Tag,
 };
+use crate::data_controllers::Progress;
 
 pub trait SerdeController {
     type Scope: SerdeScope;
@@ -38,39 +39,12 @@ pub trait SerdeController {
 */
 }
 
-pub trait SerdeScope {
-    type Request: Copy;
-
-    fn isend<T>(&mut self, data: &T, tag: Tag) -> Result<Self::Request>
+pub trait SerdeScope: Progress {
+    fn isend<T>(&mut self, data: &T, tag: Tag) -> Result<<Self as Progress>::Request>
     where
         T: Serialize + DeserializeOwned;
 
-    fn irecv(&mut self, tag: Tag) -> Result<Self::Request>;
+    fn irecv(&mut self, tag: Tag) -> Result<<Self as Progress>::Request>;
 
-    fn progress(&mut self, req: Self::Request) -> Result<SerdeRequestStatus>;
-
-    fn data<T>(&self, req: Self::Request) -> Option<T> where T: Serialize + DeserializeOwned;
-
-    fn wait_all(&mut self, reqs: &[Self::Request]) -> Result<()> {
-        loop {
-            let mut not_done = 0;
-            for req in reqs {
-                for i in 0..16 {
-                    match self.progress(*req)? {
-                        SerdeRequestStatus::InProgress => not_done += 1,
-                        SerdeRequestStatus::Complete => (),
-                    }
-                }
-            }
-            if not_done == 0 {
-                break;
-            }
-        }
-        Ok(())
-    }
-}
-
-pub enum SerdeRequestStatus {
-    InProgress,
-    Complete,
+    fn data<T>(&self, req: <Self as Progress>::Request) -> Option<T> where T: Serialize + DeserializeOwned;
 }

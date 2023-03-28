@@ -5,7 +5,7 @@ use benchmarks::{
     IovecArgs,
     data_controllers::IovecController,
 };
-use datatypes::{self, DataType};
+use datatypes::DataType;
 use iovec::ChunkSerDe;
 
 fn benchmark<T, P>(args: IovecArgs, opts: LatencyOptions, prepare: P) -> Vec<(usize, f32)>
