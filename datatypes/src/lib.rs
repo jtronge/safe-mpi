@@ -9,6 +9,7 @@ use iovec::{
     Result,
 };
 use memoffset::offset_of;
+use flat_derive::FlatBuffer;
 
 mod datatype;
 pub use datatype::DataType;
@@ -19,7 +20,7 @@ pub fn simple(size: usize) -> Vec<i32> {
     (0..count.try_into().unwrap()).collect()
 }
 
-#[derive(Serialize, Deserialize, Equivalence, Default)]
+#[derive(Serialize, Deserialize, Equivalence, FlatBuffer, Default)]
 pub struct ComplexNoncompound {
     i: i32,
     d: f64,

@@ -8,4 +8,6 @@ members = [
     "iovec",
     "benchmarks",
     "datatypes",
+    "flat",
+    "flat-derive",
 ]

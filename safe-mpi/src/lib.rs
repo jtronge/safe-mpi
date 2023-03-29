@@ -63,7 +63,17 @@ pub enum Error {
     /// Timeout occured while waiting on a request
     RequestTimeout,
     InternalError,
+    /// Invalid type received in a message
+    MessageTypeMismatch,
+    /// Invalid count of elements received in a message (no partial receives allowed)
+    MessageCountMismatch,
 }
+
+/// Immutable iovec
+pub struct Iov(pub *const u8, pub usize);
+
+/// Mutable iovec
+pub struct MutIov(pub *mut u8, pub usize);
 
 /// Handle containing the internal UCP context data and other code.
 pub(crate) struct Handle {

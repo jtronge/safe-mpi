@@ -36,24 +36,24 @@ where
             comm.scope(|scope| {
                 let mut reqs = vec![];
                 if rank == 0 {
-                    for j in 0..window_size {
+                    for _ in 0..window_size {
                         reqs.push(scope.isend(sbuf, 0).unwrap());
                     }
                 } else {
-                    for j in 0..window_size {
+                    for _ in 0..window_size {
                         reqs.push(scope.irecv(0).unwrap());
                     }
                 }
-                wait_all(scope, &reqs[..]);
+                wait_all(scope, &reqs[..]).unwrap();
                 // Extract/deserialize any data
                 for req in reqs {
                     let _ = scope.data::<T>(req);
                 }
             });
             if rank == 0 {
-                let _ = comm.recv::<Vec<i32>>(0);
+                let _ = comm.recv::<Vec<i32>>(0).unwrap();
             } else {
-                comm.send(&[0i32], 0);
+                comm.send(&[0i32], 0).unwrap();
             }
         },
     )

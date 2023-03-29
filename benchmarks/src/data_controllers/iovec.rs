@@ -90,6 +90,7 @@ pub struct IovecScope<'scope, 'env: 'scope> {
 }
 
 impl<'scope, 'env> IovecScope<'scope, 'env> {
+    /// Do a non-blocking send, returning the request index.
     pub fn isend<T>(&mut self, data: &'scope T, tag: Tag) -> Result<usize>
     where
         T: ChunkSerDe,
@@ -126,6 +127,8 @@ impl<'scope, 'env> IovecScope<'scope, 'env> {
         }
     }
 
+    /// Do a non-blocking receive for a type that will be deserialized later.
+    /// Returns the request index.
     pub fn irecv(&mut self, tag: Tag) -> Result<usize> {
         let i = self.requests.len();
         let req = self.comm.irecv(tag)?;

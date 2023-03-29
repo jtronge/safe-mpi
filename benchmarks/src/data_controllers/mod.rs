@@ -8,6 +8,8 @@ mod iovec;
 pub use self::iovec::IovecController;
 mod serde;
 pub use self::serde::{SerdeController, SerdeScope};
+mod flat;
+pub use self::flat::FlatController;
 
 use safe_mpi::{
     Result,

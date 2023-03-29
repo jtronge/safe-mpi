@@ -8,6 +8,8 @@ use crate::{
     Result,
     Error,
     Handle,
+    Iov,
+    MutIov,
     Tag,
     status_to_string,
     context::Context,
@@ -52,6 +54,11 @@ impl Communicator {
         }
     }
 
+    /// Blocking iovec send
+    pub fn send_iov(&self, data: &[Iov], tag: Tag) -> Result<usize> {
+        Ok(0)
+    }
+
     /// Blocking recv
     pub fn recv(&self, tag: Tag) -> Result<Vec<u8>> {
         unsafe {
@@ -59,6 +66,11 @@ impl Communicator {
             while let RequestStatus::InProgress = req.progress()? {}
             req.data().ok_or(Error::InternalError)
         }
+    }
+
+    /// Blocking iovec recv
+    pub fn recv_iov(&self, data: &[MutIov], tag: Tag) -> Result<()> {
+        Ok(())
     }
 
     /// Non-blocking send
@@ -77,17 +89,5 @@ impl Communicator {
     /// references to user-provided buffers.
     pub fn irecv(&self, tag: Tag) -> Result<RecvRequest> {
         Ok(RecvRequest::new(Rc::clone(&self.handle), tag))
-/*
-        let complete = Box::new(false);
-        let complete = Box::into_raw(complete);
-        Ok(RecvRequest {
-            state: RecvRequestState::Probe,
-            tag,
-            complete,
-            req: std::ptr::null_mut(),
-            handle: Rc::clone(&self.handle),
-            data: None,
-        })
-*/
     }
 }
