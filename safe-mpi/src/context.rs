@@ -1,24 +1,11 @@
-use std::io::Write;
 use std::mem::MaybeUninit;
-use std::net::{SocketAddr, TcpStream, TcpListener, Shutdown};
 use std::rc::Rc;
 use std::cell::RefCell;
-use log::{debug, info};
+// use log::{debug, info};
 use ucx2_sys::{
-    ucp_cleanup,
-    ucp_context_h,
-    ucp_worker_h,
-    ucp_worker_create,
-    ucp_worker_destroy,
-    ucp_worker_get_address,
-    ucp_worker_release_address,
-    ucp_worker_params_t,
     ucp_ep_create,
     ucp_ep_h,
     ucp_ep_params_t,
-    ucp_address_t,
-    UCP_WORKER_PARAM_FIELD_THREAD_MODE,
-    UCS_THREAD_MODE_SINGLE,
     UCP_ERR_HANDLING_MODE_PEER,
     UCP_EP_PARAM_FIELD_REMOTE_ADDRESS,
     UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE,

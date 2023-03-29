@@ -1,11 +1,12 @@
 use std::os::raw::c_void;
 use serde::{Serialize, de::DeserializeOwned};
 use safe_mpi::{
-    Result,
     Error,
-    Tag,
+    Iov,
     Request as SRequest,
     RequestStatus,
+    Result,
+    Tag,
     communicator::{
         Communicator,
         Data,
@@ -35,17 +36,19 @@ impl SerdeController for BincodeController {
     where
         T: Serialize + DeserializeOwned,
     {
-        let buf = bincode::serialize(data)
-            .map_err(|_| Error::SerializeError)?;
-        let buf = Data::Contiguous(&buf);
-        self.comm.send(buf, tag)
+        unsafe {
+            let buf = bincode::serialize(data)
+                .map_err(|_| Error::SerializeError)?;
+            let data = [Iov(buf.as_ptr(), buf.len())];
+            self.comm.send(&data, tag)
+        }
     }
 
     fn recv<T>(&self, tag: Tag) -> Result<T>
     where
         T: Serialize + DeserializeOwned,
     {
-        let buf = self.comm.recv(tag)?;
+        let buf = self.comm.recv_probe(tag)?;
         bincode::deserialize(&buf)
             .map_err(|_| Error::DeserializeError)
     }
@@ -96,7 +99,7 @@ impl SerdeScope for BincodeScope {
 
     fn irecv(&mut self, tag: Tag) -> Result<usize> {
         let i = self.requests.len();
-        let req = self.comm.irecv(tag)?;
+        let req = self.comm.irecv_probe(tag)?;
         let req: Box<Box<dyn SRequest>> = Box::new(Box::new(req));
         let rptr = Box::into_raw(req) as *mut c_void;
         self.requests.push(RequestData {

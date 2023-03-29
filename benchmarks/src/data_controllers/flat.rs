@@ -7,10 +7,7 @@ use safe_mpi::{
     Error,
     Iov,
     MutIov,
-    communicator::{
-        Communicator,
-        Data,
-    },
+    communicator::Communicator,
 };
 use flat::FlatBuffer;
 use crate::data_controllers::Progress;
@@ -41,7 +38,7 @@ impl FlatController {
                 Iov(count_ptr, std::mem::size_of::<usize>()),
                 Iov(data.ptr(), data.size()),
             ];
-            self.comm.send_iov(&iovecs[..], tag)
+            self.comm.send(&iovecs[..], tag)
         }
     }
 

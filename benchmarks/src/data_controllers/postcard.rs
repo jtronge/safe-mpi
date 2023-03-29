@@ -5,6 +5,7 @@ use safe_mpi::{
     Error,
     Tag,
     RequestStatus,
+    Iov,
     communicator::{
         Communicator,
         Data,
@@ -34,17 +35,19 @@ impl SerdeController for PostcardController {
     where
         T: Serialize + DeserializeOwned,
     {
-        let buf = postcard::to_allocvec(data)
-            .map_err(|_| Error::SerializeError)?;
-        let buf = Data::Contiguous(&buf);
-        self.comm.send(buf, tag)
+        unsafe {
+            let buf = postcard::to_allocvec(data)
+                .map_err(|_| Error::SerializeError)?;
+            let data = [Iov(buf.as_ptr() as *const _, buf.len())];
+            self.comm.send(&data, tag)
+        }
     }
 
     fn recv<T>(&self, tag: Tag) -> Result<T>
     where
         T: Serialize + DeserializeOwned,
     {
-        let buf = self.comm.recv(tag)?;
+        let buf = self.comm.recv_probe(tag)?;
         postcard::from_bytes(&buf)
             .map_err(|_| Error::DeserializeError)
     }

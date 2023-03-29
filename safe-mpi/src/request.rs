@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -15,6 +16,7 @@ use ucx2_sys::{
     ucp_tag_probe_nb,
     ucp_tag_recv_info_t,
     ucp_tag_send_nbx,
+    ucp_tag_recv_nbx,
     ucp_worker_h,
     ucp_worker_progress,
     UCP_DATATYPE_IOV,
@@ -29,6 +31,8 @@ use crate::{
     Result,
     Error,
     Handle,
+    Iov,
+    MutIov,
     Tag,
     communicator::Data,
     callbacks::{send_nbx_callback, tag_recv_nbx_callback},
@@ -43,12 +47,290 @@ pub enum RequestStatus {
 }
 
 pub trait Request {
-    /// Progress the request
+    /// Progress the request.
     unsafe fn progress(&mut self) -> Result<RequestStatus>;
-    /// Return the request size, if it has one
+    /// Return the request size, if it has one.
     fn size(&self) -> Option<usize>;
-    /// Return the received data, if there was any
+    /// Return received data if this request allocated the data.
     fn data(&mut self) -> Option<Vec<u8>>;
+}
+
+pub struct SendIovRequest<'a> {
+    /// Boolean indicating completion (allocated with Box)
+    complete: *mut bool,
+    req: *mut c_void,
+    /// Amount of data sent in the request (in bytes)
+    req_size: usize,
+    /// Handle to ucx objects
+    handle: Rc<RefCell<Handle>>,
+    /// iovecs, if used for this request
+    _iov: Option<Vec<ucp_dt_iov>>,
+    marker: PhantomData<&'a ()>,
+}
+
+impl<'a> SendIovRequest<'a> {
+    pub(crate) unsafe fn new(
+        handle: Rc<RefCell<Handle>>,
+        // data: Data<'a>,
+        data: &'a [Iov],
+        tag: Tag,
+    ) -> Result<SendIovRequest<'a>> {
+        let endpoint = handle.borrow().endpoint.unwrap();
+/*
+        let (ptr, len, req_size, datatype, iov) = match &data {
+            Data::Contiguous(buf) => (
+                buf.as_ptr() as *const _,
+                buf.len(),
+                buf.len(),
+                rust_ucp_dt_make_contig(1).try_into().unwrap(),
+                None,
+            ),
+            Data::Chunked(chunks) => {
+                let datatype = UCP_DATATYPE_IOV.try_into().unwrap();
+                let mut total = 0;
+                let iov: Option<Vec<ucp_dt_iov>> = Some(
+                    chunks
+                        .iter()
+                        .map(|slice| {
+                            total += slice.len();
+                            ucp_dt_iov {
+                                buffer: slice.as_ptr() as *mut _,
+                                length: slice.len(),
+                            }
+                        })
+                        .collect()
+                );
+                (
+                    iov.as_ref().unwrap().as_ptr() as *const _,
+                    chunks.len(),
+                    total,
+                    datatype,
+                    iov,
+                )
+            }
+        };
+*/
+        let (ptr, len, req_size, datatype, iov) = {
+            let datatype = UCP_DATATYPE_IOV.try_into().unwrap();
+            let mut total = 0;
+            let iov: Option<Vec<ucp_dt_iov>> = Some(
+                data
+                    .iter()
+                    .map(|iov| {
+                        total += iov.1;
+                        ucp_dt_iov {
+                            buffer: iov.0 as *mut _,
+                            length: iov.1,
+                        }
+                    })
+                    .collect()
+            );
+            (
+                iov.as_ref().unwrap().as_ptr() as *const _,
+                data.len(),
+                total,
+                datatype,
+                iov,
+            )
+        };
+        let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
+        param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE
+                             | UCP_OP_ATTR_FIELD_CALLBACK
+                             | UCP_OP_ATTR_FIELD_USER_DATA;
+        param.datatype = datatype;
+        param.cb.send = Some(send_nbx_callback);
+        // Callback info
+        let cb_info: *mut bool = Box::into_raw(Box::new(false));
+        param.user_data = cb_info as *mut _;
+
+        let req = ucp_tag_send_nbx(
+            endpoint,
+            ptr,
+            len,
+            tag,
+            &param,
+        );
+        Ok(SendIovRequest {
+            complete: cb_info,
+            req,
+            req_size,
+            handle,
+            // The iov data needs to be stored as long as the request is
+            // alive
+            _iov: iov,
+            marker: PhantomData,
+        })
+    }
+}
+
+impl<'a> Drop for SendIovRequest<'a> {
+    fn drop(&mut self) {
+        unsafe {
+            if rust_ucs_ptr_is_ptr(self.req) != 0 {
+                ucp_request_free(self.req);
+            }
+            let _ = Box::from_raw(self.complete);
+        }
+    }
+}
+
+impl<'a> Request for SendIovRequest<'a> {
+    /// Make progress on the send request
+    unsafe fn progress(&mut self) -> Result<RequestStatus> {
+        info!("Running progress() on SendRequest");
+        let worker = self.handle.borrow().worker;
+        request_progress(worker, self.req, self.complete)
+    }
+
+    /// Return the size of the send request
+    fn size(&self) -> Option<usize> {
+        Some(self.req_size)
+    }
+
+    /// Returns none, no data to return for a send request
+    fn data(&mut self) -> Option<Vec<u8>> {
+        None
+    }
+}
+
+pub struct RecvIovRequest<'a> {
+    /// Boolean indicating completion (allocated with Box)
+    complete: *mut bool,
+    req: *mut c_void,
+    /// Amount of data sent in the request (in bytes)
+    req_size: usize,
+    /// Handle to ucx objects
+    handle: Rc<RefCell<Handle>>,
+    /// iovecs, if used for this request
+    _iov: Option<Vec<ucp_dt_iov>>,
+    marker: PhantomData<&'a mut ()>,
+}
+
+impl<'a> RecvIovRequest<'a> {
+    pub(crate) unsafe fn new(
+        handle: Rc<RefCell<Handle>>,
+        // data: Data<'a>,
+        data: &'a [MutIov],
+        tag: Tag,
+    ) -> Result<RecvIovRequest<'a>> {
+        let worker = handle.borrow().worker;
+/*
+        let (ptr, len, req_size, datatype, iov) = match &data {
+            Data::Contiguous(buf) => (
+                buf.as_ptr() as *const _,
+                buf.len(),
+                buf.len(),
+                rust_ucp_dt_make_contig(1).try_into().unwrap(),
+                None,
+            ),
+            Data::Chunked(chunks) => {
+                let datatype = UCP_DATATYPE_IOV.try_into().unwrap();
+                let mut total = 0;
+                let iov: Option<Vec<ucp_dt_iov>> = Some(
+                    chunks
+                        .iter()
+                        .map(|slice| {
+                            total += slice.len();
+                            ucp_dt_iov {
+                                buffer: slice.as_ptr() as *mut _,
+                                length: slice.len(),
+                            }
+                        })
+                        .collect()
+                );
+                (
+                    iov.as_ref().unwrap().as_ptr() as *const _,
+                    chunks.len(),
+                    total,
+                    datatype,
+                    iov,
+                )
+            }
+        };
+*/
+        let (ptr, len, req_size, datatype, iov) = {
+            let datatype = UCP_DATATYPE_IOV.try_into().unwrap();
+            let mut total = 0;
+            let iov: Option<Vec<ucp_dt_iov>> = Some(
+                data
+                    .iter()
+                    .map(|iov| {
+                        total += iov.1;
+                        ucp_dt_iov {
+                            buffer: iov.0 as *mut _,
+                            length: iov.1,
+                        }
+                    })
+                    .collect()
+            );
+            (
+                iov.as_ref().unwrap().as_ptr() as *mut _,
+                data.len(),
+                total,
+                datatype,
+                iov,
+            )
+        };
+        let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
+        param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE
+                             | UCP_OP_ATTR_FIELD_CALLBACK
+                             | UCP_OP_ATTR_FIELD_USER_DATA
+                             | UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
+        param.datatype = datatype;
+        param.cb.recv = Some(tag_recv_nbx_callback);
+        // Callback info
+        let cb_info: *mut bool = Box::into_raw(Box::new(false));
+        param.user_data = cb_info as *mut _;
+
+        let req = ucp_tag_recv_nbx(
+            worker,
+            ptr,
+            len,
+            tag,
+            0,
+            &param,
+        );
+        Ok(RecvIovRequest {
+            complete: cb_info,
+            req,
+            req_size,
+            handle,
+            // The iov data needs to be stored as long as the request is
+            // alive
+            _iov: iov,
+            marker: PhantomData,
+        })
+    }
+}
+
+impl<'a> Drop for RecvIovRequest<'a> {
+    fn drop(&mut self) {
+        unsafe {
+            if rust_ucs_ptr_is_ptr(self.req) != 0 {
+                ucp_request_free(self.req);
+            }
+            let _ = Box::from_raw(self.complete);
+        }
+    }
+}
+
+impl<'a> Request for RecvIovRequest<'a> {
+    /// Make progress on the send request
+    unsafe fn progress(&mut self) -> Result<RequestStatus> {
+        info!("Running progress() on SendRequest");
+        let worker = self.handle.borrow().worker;
+        request_progress(worker, self.req, self.complete)
+    }
+
+    /// Return the size of the send request
+    fn size(&self) -> Option<usize> {
+        Some(self.req_size)
+    }
+
+    /// Returns none, no data to return for a send request
+    fn data(&mut self) -> Option<Vec<u8>> {
+        None
+    }
 }
 
 pub struct SendRequest<'a> {
@@ -200,7 +482,7 @@ impl<'a> Request for SendRequest<'a> {
     }
 }
 
-enum RecvRequestState {
+enum RecvProbeRequestState {
     /// Probing for the message
     Probe,
     /// Need to wait on the message
@@ -209,20 +491,20 @@ enum RecvRequestState {
     Complete,
 }
 
-pub struct RecvRequest {
+pub struct RecvProbeRequest {
     handle: Rc<RefCell<Handle>>,
-    state: RecvRequestState,
+    state: RecvProbeRequestState,
     tag: Tag,
     complete: *mut bool,
     req: *mut c_void,
     data: Option<Vec<u8>>,
 }
 
-impl RecvRequest {
-    pub(crate) fn new(handle: Rc<RefCell<Handle>>, tag: Tag) -> RecvRequest {
-        RecvRequest {
+impl RecvProbeRequest {
+    pub(crate) fn new(handle: Rc<RefCell<Handle>>, tag: Tag) -> RecvProbeRequest {
+        RecvProbeRequest {
             handle,
-            state: RecvRequestState::Probe,
+            state: RecvProbeRequestState::Probe,
             tag,
             complete: Box::into_raw(Box::new(false)),
             req: std::ptr::null_mut(),
@@ -231,7 +513,7 @@ impl RecvRequest {
     }
 }
 
-impl Drop for RecvRequest {
+impl Drop for RecvProbeRequest {
     fn drop(&mut self) {
         unsafe {
             if rust_ucs_ptr_is_ptr(self.req) != 0 {
@@ -242,13 +524,13 @@ impl Drop for RecvRequest {
     }
 }
 
-impl Request for RecvRequest {
+impl Request for RecvProbeRequest {
     /// Progress the request. This will need to be called multiple times until
     /// error or `Ok(RequestStatus::Complete)` is returned.
     unsafe fn progress(&mut self) -> Result<RequestStatus> {
         let worker = self.handle.borrow().worker;
         match self.state {
-            RecvRequestState::Probe => {
+            RecvProbeRequestState::Probe => {
                 ucp_worker_progress(worker);
                 let mut info = MaybeUninit::<ucp_tag_recv_info_t>::uninit();
                 // Probe for the message
@@ -256,9 +538,9 @@ impl Request for RecvRequest {
                 if message != std::ptr::null_mut() {
                     // Message probed, go ahead and allocate everything and
                     // start the receive.
-                    self.state = RecvRequestState::Wait;
+                    self.state = RecvProbeRequestState::Wait;
                     let info = info.assume_init();
-                    self.data.insert(vec![0; info.length]);
+                    let _ = self.data.insert(vec![0; info.length]);
                     let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
                     param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK
                                          | UCP_OP_ATTR_FIELD_DATATYPE
@@ -277,18 +559,18 @@ impl Request for RecvRequest {
                 }
                 Ok(RequestStatus::InProgress)
             }
-            RecvRequestState::Wait => {
+            RecvProbeRequestState::Wait => {
                 // Wait until request completion
                 let worker = self.handle.borrow().worker;
                 match request_progress(worker, self.req, self.complete)? {
                     RequestStatus::Complete => {
-                        self.state = RecvRequestState::Complete;
+                        self.state = RecvProbeRequestState::Complete;
                         Ok(RequestStatus::Complete)
                     }
                     status => Ok(status),
                 }
             }
-            RecvRequestState::Complete => Ok(RequestStatus::Complete),
+            RecvProbeRequestState::Complete => Ok(RequestStatus::Complete),
         }
     }
 

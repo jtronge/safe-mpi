@@ -3,11 +3,12 @@ use std::borrow::Borrow;
 use std::marker::PhantomData;
 use iovec::{ChunkSerDe, Chunk};
 use safe_mpi::{
-    Result,
-    Tag,
     Error,
+    Iov,
     RequestStatus,
     Request as SRequest,
+    Result,
+    Tag,
     communicator::{
         Communicator,
         Data,
@@ -30,24 +31,26 @@ impl IovecController {
     where
         T: ChunkSerDe,
     {
-        let mut chunks = vec![];
-        data.serialize(&mut chunks)
-            .map_err(|_| Error::SerializeError)?;
-        let send_data: Vec<&[u8]> = chunks
-            .iter()
-            .map(|chunk| match chunk {
-                Chunk::Slice(slice) => slice,
-                Chunk::Data(data) => &data[..],
-            })
-            .collect();
-        self.comm.send(Data::Chunked(&send_data[..]), tag)
+        unsafe {
+            let mut chunks = vec![];
+            data.serialize(&mut chunks)
+                .map_err(|_| Error::SerializeError)?;
+            let send_data: Vec<Iov> = chunks
+                .iter()
+                .map(|chunk| match chunk {
+                    Chunk::Slice(slice) => Iov(slice.as_ptr(), slice.len()),
+                    Chunk::Data(data) => Iov(data.as_ptr(), data.len()),
+                })
+                .collect();
+            self.comm.send(&send_data, tag)
+        }
     }
 
     pub fn recv<T>(&self, tag: Tag) -> Result<T>
     where
         T: ChunkSerDe,
     {
-        let buf = self.comm.recv(tag)?;
+        let buf = self.comm.recv_probe(tag)?;
         let (data, size) = T::deserialize(&buf)
             .map_err(|_| Error::DeserializeError)?;
         Ok(data)
@@ -131,7 +134,7 @@ impl<'scope, 'env> IovecScope<'scope, 'env> {
     /// Returns the request index.
     pub fn irecv(&mut self, tag: Tag) -> Result<usize> {
         let i = self.requests.len();
-        let req = self.comm.irecv(tag)?;
+        let req = self.comm.irecv_probe(tag)?;
         let req: Box<Box<dyn SRequest>> = Box::new(Box::new(req));
         let rptr = Box::into_raw(req) as *mut c_void;
         self.requests.push(Request {

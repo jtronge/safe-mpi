@@ -4,10 +4,9 @@ use ucx2_sys::{
     ucs_status_t,
     UCS_OK,
 };
-use crate::status_to_string;
 
 pub(crate) unsafe extern "C" fn send_nbx_callback(
-    req: *mut c_void,
+    _req: *mut c_void,
     status: ucs_status_t,
     user_data: *mut c_void,
 ) {
@@ -16,9 +15,9 @@ pub(crate) unsafe extern "C" fn send_nbx_callback(
 }
 
 pub(crate) unsafe extern "C" fn tag_recv_nbx_callback(
-    req: *mut c_void,
+    _req: *mut c_void,
     status: ucs_status_t,
-    tag_info: *const ucp_tag_recv_info_t,
+    _tag_info: *const ucp_tag_recv_info_t,
     user_data: *mut c_void,
 ) {
     let done = user_data as *mut bool;

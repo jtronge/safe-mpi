@@ -33,7 +33,6 @@ use std::net::{
     TcpStream,
     SocketAddr,
     Shutdown,
-    Ipv4Addr,
 };
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -148,7 +147,12 @@ unsafe fn create_worker(context: ucp_context_h) -> Result<ucp_worker_h> {
 }
 
 /// Exchange addresses between the two processes.
-unsafe fn exchange_addrs(context: ucp_context_h, worker: ucp_worker_h, server: bool, sockaddr: SocketAddr) -> Result<Vec<u8>> {
+unsafe fn exchange_addrs(
+    _context: ucp_context_h,
+    worker: ucp_worker_h,
+    server: bool,
+    sockaddr: SocketAddr,
+) -> Result<Vec<u8>> {
     // Get the address of the worker
     let mut address = MaybeUninit::<*mut ucp_address_t>::uninit();
     let mut addrlen = MaybeUninit::<usize>::uninit();

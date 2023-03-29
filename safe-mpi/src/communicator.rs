@@ -1,9 +1,6 @@
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::mem::MaybeUninit;
-use std::os::raw::c_void;
-use log::info;
-use serde::{Serialize, de::DeserializeOwned};
+// use log::info;
 use crate::{
     Result,
     Error,
@@ -11,10 +8,14 @@ use crate::{
     Iov,
     MutIov,
     Tag,
-    status_to_string,
-    context::Context,
-    util::wait_loop,
-    request::{RequestStatus, Request, RecvRequest, SendRequest}
+    request::{
+        RequestStatus,
+        Request,
+        RecvIovRequest,
+        RecvProbeRequest,
+        SendIovRequest,
+        SendRequest,
+    },
 };
 
 /// Data reference type for send request
@@ -45,31 +46,26 @@ impl Communicator {
         }
     }
 
-    /// Blocking send
-    pub fn send(&self, data: Data, tag: Tag) -> Result<usize> {
-        unsafe {
-            let mut req = self.isend(data, tag)?;
-            while let RequestStatus::InProgress = req.progress()? {}
-            req.size().ok_or(Error::InternalError)
-        }
-    }
-
     /// Blocking iovec send
-    pub fn send_iov(&self, data: &[Iov], tag: Tag) -> Result<usize> {
-        Ok(0)
+    pub unsafe fn send(&self, data: &[Iov], tag: Tag) -> Result<usize> {
+        let mut req = self.isend_iov(data, tag)?;
+        while let RequestStatus::InProgress = req.progress()? {}
+        req.size().ok_or(Error::InternalError)
     }
 
-    /// Blocking recv
-    pub fn recv(&self, tag: Tag) -> Result<Vec<u8>> {
+    /// Blocking recv and probe
+    pub fn recv_probe(&self, tag: Tag) -> Result<Vec<u8>> {
         unsafe {
-            let mut req = self.irecv(tag)?;
+            let mut req = self.irecv_probe(tag)?;
             while let RequestStatus::InProgress = req.progress()? {}
             req.data().ok_or(Error::InternalError)
         }
     }
 
     /// Blocking iovec recv
-    pub fn recv_iov(&self, data: &[MutIov], tag: Tag) -> Result<()> {
+    pub unsafe fn recv_iov(&self, data: &[MutIov], tag: Tag) -> Result<()> {
+        let mut req = self.irecv_iov(data, tag)?;
+        while let RequestStatus::InProgress = req.progress()? {}
         Ok(())
     }
 
@@ -83,11 +79,21 @@ impl Communicator {
         SendRequest::new(Rc::clone(&self.handle), data, tag)
     }
 
-    /// Non-blocking receive
+    /// Non-blocking send
+    pub unsafe fn isend_iov<'a>(&self, data: &'a [Iov], tag: Tag) -> Result<SendIovRequest<'a>> {
+        SendIovRequest::new(Rc::clone(&self.handle), data, tag)
+    }
+
+    /// Non-blocking receive with probe
     ///
     /// This is safe, when compared with isend, since it doesn't hold any
     /// references to user-provided buffers.
-    pub fn irecv(&self, tag: Tag) -> Result<RecvRequest> {
-        Ok(RecvRequest::new(Rc::clone(&self.handle), tag))
+    pub fn irecv_probe(&self, tag: Tag) -> Result<RecvProbeRequest> {
+        Ok(RecvProbeRequest::new(Rc::clone(&self.handle), tag))
+    }
+
+    /// Non-blocking receive
+    pub unsafe fn irecv_iov<'a>(&self, data: &'a [MutIov], tag: Tag) -> Result<RecvIovRequest<'a>> {
+        RecvIovRequest::new(Rc::clone(&self.handle), data, tag)
     }
 }

@@ -3,6 +3,7 @@ use rmp_serde;
 use safe_mpi::{
     Result,
     Error,
+    Iov,
     Tag,
     RequestStatus,
     communicator::{
@@ -34,17 +35,19 @@ impl SerdeController for MessagePackController {
     where
         T: Serialize + DeserializeOwned,
     {
-        let buf = rmp_serde::to_vec(data)
-            .map_err(|_| Error::SerializeError)?;
-        let buf = Data::Contiguous(&buf);
-        self.comm.send(buf, tag)
+        unsafe {
+            let buf = rmp_serde::to_vec(data)
+                .map_err(|_| Error::SerializeError)?;
+            let data = [Iov(buf.as_ptr(), buf.len())];
+            self.comm.send(&data, tag)
+        }
     }
 
     fn recv<T>(&self, tag: Tag) -> Result<T>
     where
         T: Serialize + DeserializeOwned,
     {
-        let buf = self.comm.recv(tag)?;
+        let buf = self.comm.recv_probe(tag)?;
         rmp_serde::decode::from_slice(&buf)
             .map_err(|_| Error::DeserializeError)
     }
