@@ -49,8 +49,9 @@ impl SerdeController for BincodeController {
         T: Serialize + DeserializeOwned,
     {
         let buf = self.comm.recv_probe(tag)?;
-        bincode::deserialize(&buf)
-            .map_err(|_| Error::DeserializeError)
+        // bincode::deserialize(&buf)
+        //    .map_err(|_| Error::DeserializeError)
+        Ok(bincode::deserialize(&buf).unwrap())
     }
 
     fn scope<F, R>(&self, f: F) -> R

@@ -1,5 +1,4 @@
-## Crates
-
+## Crates and Subdirectories
 
 ### datatypes
 
@@ -13,3 +12,7 @@ The actual benchmarking code, output and comparison code.
 ### safe-mpi
 
 Code for interacting with UCX and sending/receiving messages.
+
+### scripts
+
+This includes the run, benchmarking, and graphing scripts.

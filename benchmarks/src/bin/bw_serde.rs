@@ -28,6 +28,7 @@ where
     P: Fn(usize) -> Vec<T>,
     S: SerdeController,
 {
+    let ack_msg = vec![0i32];
     benchmarks::bw(
         opts,
         rank,
@@ -53,7 +54,7 @@ where
             if rank == 0 {
                 let _ = comm.recv::<Vec<i32>>(0).unwrap();
             } else {
-                comm.send(&[0i32], 0).unwrap();
+                comm.send(&ack_msg, 0).unwrap();
             }
         },
     )

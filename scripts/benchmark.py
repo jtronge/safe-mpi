@@ -1,117 +1,162 @@
 import argparse
+import json
 import os
 import subprocess
-import socket
-import time
-import yaml
 
 
-parser = argparse.ArgumentParser(description='benchmark runner')
-parser.add_argument('-o', '--output', help='script and benchmark output path', required=True)
-parser.add_argument('-n', '--node', help='node to use as server', required=True)
-parser.add_argument('-e', '--env', help='bash environment to load', required=True)
-args = parser.parse_args()
+def parse_latency(fname):
+    """Parse a latency example and return the results."""
+    results = []
+    with open(fname) as fp:
+        for line in fp:
+            line = line.strip()
+            if not line:
+                break
+            size, lat = line.split(' ')
+            results.append((int(size), float(lat)))
+    return results
 
 
-def start_job(cmd, script, output, node=None, node_count=1):
-    """Build a script for slurm and start the job."""
-    with open(script, 'w') as fp:
-        print('#!/bin/sh', file=fp)
-        print(f'#SBATCH -o {output}', file=fp)
-        print(f'#SBATCH -N {node_count}', file=fp)
-        if node is not None:
-            print(f'#SBATCH -w {node}', file=fp)
-        print(f'source {args.env}', file=fp)
-        print(' '.join(cmd), file=fp)
-    return subprocess.Popen(['sbatch', '-W', script])
+def parse_bw(fname):
+    """Parse a bandwidth example and return the results."""
+    results = []
+    with open(fname) as fp:
+        for line in fp:
+            line = line.strip()
+            if not line:
+                break
+            size, bw = line.split(' ')
+            results.append((int(size), float(bw)))
+    return results
 
 
-def serde_command(kind, server_node, config, server=False):
-    """Build a command for the serde benchmark."""
-    ip = socket.gethostbyname(server_node)
-    cmd = ['./target/release/latency_serde', ip, '-p', '7776', '-k', kind,
-           '-c', config]
-    if server:
-        cmd.append('-s')
-    return cmd
+def combine_latency(results):
+    """Combine and average multiple latency runs."""
+    data = {size: lat for size, lat in results[0]}
+    for result in results[1:]:
+        for size, lat in result:
+            data[size] += lat
+    return {size: total / len(results) for size, total in data.items()}
 
 
-def serde_test(kind):
-    """Return a serde-based test (kind is one of message-pack, postcard, bincode)."""
-    def test(run, config, prefix, node):
-        """Run the serde tests."""
-        server = start_job(
-            cmd=serde_command(kind=kind, server_node=node, server=True,
-                              config=config),
-            script=f'{prefix}_server.sh',
-            output=f'{prefix}_server.out',
-            node=node,
-        )
-        time.sleep(8)
-        client = start_job(
-            cmd=serde_command(kind=kind, server_node=node,
-                              config=config),
-            script=f'{prefix}_client.sh',
-            output=f'{prefix}_client.out',
-        )
-        client.wait()
-        server.wait()
-    return test
+def combine_bw(results):
+    """Combine and average multiple bandwidth runs."""
+    data = {size: bw for size, bw in results[0]}
+    for result in results[1:]:
+        for size, bw in result:
+            data[size] += bw
+    return {size: total / len(results) for size, total in data.items()}
 
 
-def iovec_test(run, config, prefix, node):
-    """Run the iovec test."""
-    ip = socket.gethostbyname(node)
-    port = 1347
-    cmd = ['target/release/latency_iovec', ip, '-p', str(port), '-c', config]
-    server = start_job(
-        cmd=(cmd + ['-s']),
-        script=f'{prefix}_server.sh',
-        output=f'{prefix}_server.out',
-        node=node,
-    )
-    time.sleep(8)
-    client = start_job(
-        cmd=cmd,
-        script=f'{prefix}_client.sh',
-        output=f'{prefix}_client.out',
-    )
-    client.wait()
-    server.wait()
+parsers = {
+    'latency': parse_latency,
+    'bw': parse_bw,
+}
 
+combiners = {
+    'latency': combine_latency,
+    'bw': combine_bw,
+}
 
-def rsmpi_test(run, config, prefix, node):
-    """Run the rsmpi test."""
-    cmd = ['mpirun', '-np', '2', '-N', '1', './target/release/latency_rsmpi', '-c', config]
-    start_job(cmd=cmd, script=f'{prefix}.sh', output=f'{prefix}.out', node_count=2).wait()
-
-
-# client_node = 'er02'
-configs = {
-    './params/latency/simple.yaml': {
-        'message-pack': serde_test('message-pack'),
-        'postcard': serde_test('postcard'),
-        'bincode': serde_test('bincode'),
-        'iovec': iovec_test,
-        'rsmpi': rsmpi_test,
+sbatch_scripts = {
+    'latency': {
+        # 'message-pack'
+        'bincode': './scripts/latency_bincode.sh',
+        'iovec': './scripts/latency_iovec.sh',
+        'rsmpi': './scripts/latency_rsmpi.sh',
     },
-    './params/latency/complex-noncompound.yaml': {
-        'message-pack': serde_test('message-pack'),
-        'postcard': serde_test('postcard'),
-        'bincode': serde_test('bincode'),
-        'iovec': iovec_test,
-        'rsmpi': rsmpi_test,
-    },
-    './params/latency/complex-compound.yaml': {
-        'message-pack': serde_test('message-pack'),
-        'postcard': serde_test('postcard'),
-        'bincode': serde_test('bincode'),
-        'iovec': iovec_test,
+    'bw': {
+        'bincode': './scripts/bw_bincode.sh',
+        'iovec': './scripts/bw_iovec.sh',
+        'rsmpi': './scripts/bw_rsmpi.sh',
+        'flat': './scripts/bw_flat.sh',
+    }
+}
+
+benchmarks = {
+    'latency': {
+        './params/latency/simple.yaml': [
+            #'message-pack',
+            #'postcard',
+            'bincode',
+            'iovec',
+            'rsmpi',
+        ],
+        './params/latency/complex-noncompound.yaml': [
+            #'message-pack',
+            #'postcard',
+            'bincode',
+            'iovec',
+            'rsmpi',
+        ],
+        './params/latency/complex-compound.yaml': [
+            #'message-pack',
+            #'postcard',
+            'bincode',
+            'iovec',
         # rsmpi does not support complex-compound datatypes
+        ],
+    },
+    'bw': {
+        './params/bw/complex-noncompound.yaml': [
+            'iovec',
+            'bincode',
+            'flat',
+            'rsmpi',
+        ],
+        './params/bw/complex-compound.yaml': [
+            'iovec',
+            'bincode',
+        ],
     },
 }
-run_count = 4
+output = 'tmp.out'
 
+parser = argparse.ArgumentParser(description='benchmark run script for Slurm')
+parser.add_argument('-e', '--env-file', help='environment file to load',
+                    required=True)
+parser.add_argument('-o', '--output', help='JSON result output file',
+                    required=True)
+parser.add_argument('-r', '--run-count', help='number of runs to do',
+                    required=True, type=int)
+args = parser.parse_args()
+
+all_results = {}
+for benchmark, configs in benchmarks.items():
+    print('##################################')
+    print('running benchmark', benchmark)
+    benchmark_result = {}
+    for config, tests in configs.items():
+        config_result = {}
+        print('----------------------------------')
+        print('testing config', config)
+        for test_name in tests:
+            sbatch_script = sbatch_scripts[benchmark][test_name]
+            results = []
+            for run in range(args.run_count):
+                env = dict(os.environ)
+                env.update({
+                    'SAFE_MPI_ENV_FILE': args.env_file,
+                    'SAFE_MPI_CONFIG': config,
+                })
+                # Run the job until completion
+                subprocess.run(['sbatch', '-W', '-o', output, sbatch_script],
+                               env=env)
+                # Parse and save the results
+                parser = parsers[benchmark]
+                results.append(parser(output))
+            # Now combine the runs and add it to the final results
+            combined_result = combiners[benchmark](results)
+            config_result[test_name] = combined_result
+        config_prefix = os.path.basename(config)
+        config_prefix = config_prefix.split('.')[0]
+        benchmark_result[config_prefix] = config_result
+    all_results[benchmark] = benchmark_result
+
+with open(args.output, 'w') as fp:
+    json.dump(all_results, fp, indent=4)
+
+"""
 for config, tests in configs.items():
     print('testing', config)
     config_prefix = os.path.basename(config)
@@ -123,3 +168,4 @@ for config, tests in configs.items():
             prefix = os.path.join(args.output, f'{config_prefix}_{test_name}_{run}')
             test(run, config, prefix, args.node)
             time.sleep(8)
+"""
