@@ -25,13 +25,13 @@ pub fn latency<T, P, B0, B1>(
     opts: LatencyOptions,
     rank: usize,
     prepare: P,
-    body0: B0,
-    body1: B1,
+    mut body0: B0,
+    mut body1: B1,
 ) -> Vec<(usize, f32)>
 where
     P: Fn(usize) -> T,
-    B0: Fn(&T),
-    B1: Fn(&T),
+    B0: FnMut(&T),
+    B1: FnMut(&T),
 {
     let mut results = vec![];
     let mut size = opts.min_size;

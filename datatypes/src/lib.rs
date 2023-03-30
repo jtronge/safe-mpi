@@ -20,11 +20,13 @@ pub fn simple(size: usize) -> Vec<i32> {
     (0..count.try_into().unwrap()).collect()
 }
 
+const X_ITEM_COUNT: usize = 16;
+
 #[derive(Serialize, Deserialize, Equivalence, FlatBuffer, Default)]
 pub struct ComplexNoncompound {
     i: i32,
     d: f64,
-    x: [f32; 16],
+    x: [f32; X_ITEM_COUNT],
 }
 
 // Tile, bucket, and alternating (from Xiong et al.)
@@ -75,47 +77,55 @@ impl ChunkSerDe for ComplexNoncompound {
 
 #[derive(Serialize, Deserialize)]
 pub struct ComplexCompound {
-    m: i32,
-    n: i32,
-    data: Vec<i32>
+    i: i32,
+    d: f64,
+    x: Vec<f32>,
 }
 
 pub fn complex_compound(size: usize) -> Vec<ComplexCompound> {
-    let mut total_size = 0;
-    let mut out = vec![];
-    for i in 0..size {
-        let len = 256;
-        // Estimate of the amount of memory for this item
-        let next_size = std::mem::size_of::<ComplexCompound>() + std::mem::size_of::<i32>() * len;
-        // Check if this next size will be too big
-        if (total_size + next_size) > size {
-            break;
-        }
-        let i: i32 = i.try_into().unwrap();
-        out.push(ComplexCompound {
-            m: i * 3,
-            n: i * 2,
-            data: (0..len.try_into().unwrap()).collect(),
-        });
-        total_size += next_size;
-    }
-    out
+    let elm_size = std::mem::size_of::<i32>()
+                   + std::mem::size_of::<f64>()
+                   + std::mem::size_of::<usize>()
+                   + std::mem::size_of::<f32>() * X_ITEM_COUNT;
+    let count = size / elm_size;
+    (0..count.try_into().unwrap())
+        .map(|i| {
+            let d = i as f64;
+            let f = i as f32;
+            ComplexCompound {
+                i,
+                d,
+                x: vec![
+                    0.01 * f, 0.06 * f, f, 0.1 * f,
+                    0.01 * f, 0.06 * f, f, 0.1 * f,
+                    0.01 * f, 0.06 * f, f, 0.1 * f,
+                    0.01 * f, 0.06 * f, f, 0.1 * f,
+                ],
+            }
+        })
+        .collect()
 }
 
 impl ChunkSerDe for ComplexCompound {
     fn serialize(&self, chunks: &mut Vec<Chunk>) -> Result<()> {
         unsafe {
-            let ptr = std::ptr::addr_of!(self) as *const u8;
-            let slice = std::slice::from_raw_parts(
-                ptr,
-                std::mem::size_of::<ComplexCompound>(),
+            chunks.push(
+                Chunk::Slice(std::slice::from_raw_parts(
+                    (&self.i as *const i32) as *const u8,
+                    std::mem::size_of::<i32>(),
+                )),
             );
-            chunks.push(Chunk::Slice(slice));
-            let len = self.data.len().to_be_bytes().to_vec();
+            chunks.push(
+                Chunk::Slice(std::slice::from_raw_parts(
+                    (&self.d as *const f64) as *const u8,
+                    std::mem::size_of::<f64>(),
+                )),
+            );
+            let len = self.x.len().to_be_bytes().to_vec();
             chunks.push(Chunk::Data(len));
             let slice = std::slice::from_raw_parts(
-                self.data.as_ptr() as *const _,
-                self.data.len() * std::mem::size_of::<i32>(),
+                self.x.as_ptr() as *const _,
+                self.x.len() * std::mem::size_of::<i32>(),
             );
             chunks.push(Chunk::Slice(slice));
             Ok(())
@@ -124,31 +134,33 @@ impl ChunkSerDe for ComplexCompound {
 
     fn deserialize(data: &[u8]) -> Result<(Self, usize)> {
         unsafe {
-            let ptr = data.as_ptr();
-            let off = offset_of!(ComplexCompound, m);
-            let m = (ptr.offset(off.try_into().unwrap()) as *const i32).read_unaligned();
-            let off = offset_of!(ComplexCompound, n);
-            let n = (ptr.offset(off.try_into().unwrap()) as *const i32).read_unaligned();
-            let ptr = ptr.offset(std::mem::size_of::<ComplexCompound>().try_into().unwrap());
+            let ptr = data.as_ptr() as *const i32;
+            let i = ptr.read_unaligned();
+            let ptr = ptr.offset(1) as *const f64;
+            let d = ptr.read_unaligned();
+            let ptr = ptr.offset(1) as *const u8;
             let len_bytes = std::slice::from_raw_parts(
                 ptr,
                 std::mem::size_of::<usize>(),
             );
             let len = usize::from_be_bytes(len_bytes.try_into().unwrap());
-            let mut ptr = ptr.offset(std::mem::size_of::<usize>().try_into().unwrap()) as *const i32;
-            let mut data = Vec::new();
-            for _ in 0..len {
-                data.push(ptr.read_unaligned());
-                ptr = ptr.offset(1);
-            }
-            let size = std::mem::size_of::<ComplexCompound>()
+            assert_eq!(len, X_ITEM_COUNT);
+            let ptr = ptr.offset(std::mem::size_of::<usize>().try_into().unwrap());
+            let mut x = vec![0.0; X_ITEM_COUNT];
+            std::ptr::copy(
+                ptr,
+                x.as_mut_ptr() as *mut u8,
+                X_ITEM_COUNT * std::mem::size_of::<f32>(),
+            );
+            let size = std::mem::size_of::<i32>()
+                       + std::mem::size_of::<f64>()
                        + std::mem::size_of::<usize>()
-                       + std::mem::size_of::<i32>() * len;
+                       + std::mem::size_of::<f32>() * len;
             Ok((
                 ComplexCompound {
-                    m,
-                    n,
-                    data,
+                    i,
+                    d,
+                    x,
                 },
                 size,
             ))

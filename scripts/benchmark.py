@@ -61,6 +61,7 @@ combiners = {
 sbatch_scripts = {
     'latency': {
         # 'message-pack'
+        'flat': './scripts/latency_flat.sh',
         'bincode': './scripts/latency_bincode.sh',
         'iovec': './scripts/latency_iovec.sh',
         'rsmpi': './scripts/latency_rsmpi.sh',
@@ -78,6 +79,7 @@ benchmarks = {
         './params/latency/simple.yaml': [
             #'message-pack',
             #'postcard',
+            'flat',
             'bincode',
             'iovec',
             'rsmpi',
@@ -85,6 +87,7 @@ benchmarks = {
         './params/latency/complex-noncompound.yaml': [
             #'message-pack',
             #'postcard',
+            'flat',
             'bincode',
             'iovec',
             'rsmpi',
@@ -94,7 +97,7 @@ benchmarks = {
             #'postcard',
             'bincode',
             'iovec',
-        # rsmpi does not support complex-compound datatypes
+            # rsmpi does not support complex-compound datatypes
         ],
     },
     'bw': {
@@ -155,17 +158,3 @@ for benchmark, configs in benchmarks.items():
 
 with open(args.output, 'w') as fp:
     json.dump(all_results, fp, indent=4)
-
-"""
-for config, tests in configs.items():
-    print('testing', config)
-    config_prefix = os.path.basename(config)
-    config_prefix = config_prefix.split('.')[0]
-    for test_name, test in tests.items():
-        print('running test', test_name)
-        for run in range(run_count):
-            print('test run', run)
-            prefix = os.path.join(args.output, f'{config_prefix}_{test_name}_{run}')
-            test(run, config, prefix, args.node)
-            time.sleep(8)
-"""

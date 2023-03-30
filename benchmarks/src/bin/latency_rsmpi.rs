@@ -15,11 +15,18 @@ use datatypes::{
 
 fn benchmark<T, P, C>(opts: LatencyOptions, rank: i32, prepare: P, comm: C) -> Vec<(usize, f32)>
 where
-    T: Equivalence,
+    T: Equivalence + Default,
     P: Fn(usize) -> Vec<T>,
     C: Communicator,
 {
     let next_rank = (rank + 1) % 2;
+    // Set up the receive buffers
+    let mut rbuf0: Vec<T> = (0..opts.max_size)
+        .map(|_| T::default())
+        .collect();
+    let mut rbuf1: Vec<T> = (0..opts.max_size)
+        .map(|_| T::default())
+        .collect();
     benchmarks::latency(
         opts,
         rank.try_into().unwrap(),
@@ -28,14 +35,14 @@ where
             comm
                 .process_at_rank(next_rank)
                 .send(&s_buf[..]);
-            let (_data, _status): (Vec<T>, Status) = comm
+            let _ = comm
                 .process_at_rank(next_rank)
-                .receive_vec();
+                .receive_into(&mut rbuf0);
         },
         |s_buf| {
-            let (_data, _status): (Vec<T>, Status) = comm
+            let _ = comm
                 .process_at_rank(next_rank)
-                .receive_vec();
+                .receive_into(&mut rbuf1);
             comm
                 .process_at_rank(next_rank)
                 .send(&s_buf[..]);
