@@ -7,11 +7,9 @@ use benchmarks::{
 use mpi::{
     self,
     traits::{Communicator, Equivalence},
-    point_to_point::{Source, Destination, Status},
+    point_to_point::{Source, Destination},
 };
 use datatypes::{self, DataType};
-use std::rc::Rc;
-use std::cell::RefCell;
 
 fn benchmark<T, P, C>(
     opts: BandwidthOptions,
@@ -39,12 +37,12 @@ where
             // same type
             mpi::request::multiple_scope(window_size, |scope, coll| {
                 if rank == 0 {
-                    for j in 0..window_size {
+                    for _ in 0..window_size {
                         coll.add(proc.immediate_send(scope, &sbuf[..]));
                     }
                 } else {
                     let mut tmp = &mut rbufs[..];
-                    for j in 0..window_size {
+                    for _ in 0..window_size {
                         let (a, b) = tmp.split_at_mut(1);
                         tmp = b;
                         let rreq = proc.immediate_receive_into(

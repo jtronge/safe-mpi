@@ -14,7 +14,7 @@ use iovec::ChunkSerDe;
 fn benchmark<T, P>(args: IovecArgs, opts: BandwidthOptions, prepare: P) -> Vec<(usize, f32)>
 where
     T: ChunkSerDe,
-    P: Fn(usize) -> T,
+    P: Fn(usize) -> Vec<T>,
 {
     let sockaddr = SocketAddr::from((args.address.octets(), args.port));
     let sm = safe_mpi::init(sockaddr, args.server)
@@ -31,21 +31,21 @@ where
             world.scope(|scope| {
                 let mut reqs = vec![];
                 if rank == 0 {
-                    for j in 0..window_size {
+                    for _ in 0..window_size {
                         reqs.push(scope.isend(sbuf, 0).unwrap());
                     }
                 } else {
-                    for j in 0..window_size {
+                    for _ in 0..window_size {
                         reqs.push(scope.irecv(0).unwrap());
                     }
                 }
-                wait_all(scope, &reqs[..]);
+                wait_all(scope, &reqs[..]).unwrap();
                 for req in reqs {
                     let _ = scope.data::<T>(req);
                 }
             });
             if rank == 0 {
-                let _ = world.recv::<Vec<i32>>(0).unwrap();
+                let _ = world.recv::<i32>(0).unwrap();
             } else {
                 world.send(&ack_msg, 0).unwrap();
             }

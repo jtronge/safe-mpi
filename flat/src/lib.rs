@@ -3,8 +3,6 @@
 use std::any::{Any, TypeId};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-#[macro_use]
-extern crate lazy_static;
 
 pub unsafe trait FlatBuffer: Any {
     /// Size of this buffer in bytes

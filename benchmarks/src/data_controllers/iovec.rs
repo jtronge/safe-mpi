@@ -27,13 +27,13 @@ impl IovecController {
         }
     }
 
-    pub fn send<T>(&self, data: &T, tag: Tag) -> Result<usize>
+    pub fn send<T>(&self, data: &[T], tag: Tag) -> Result<usize>
     where
         T: ChunkSerDe,
     {
         unsafe {
             let mut chunks = vec![];
-            data.serialize(&mut chunks)
+            T::serialize(data, &mut chunks)
                 .map_err(|_| Error::SerializeError)?;
             let send_data: Vec<Iov> = chunks
                 .iter()
@@ -46,13 +46,14 @@ impl IovecController {
         }
     }
 
-    pub fn recv<T>(&self, tag: Tag) -> Result<T>
+    pub fn recv<T>(&self, tag: Tag) -> Result<Vec<T>>
     where
         T: ChunkSerDe,
     {
         let buf = self.comm.recv_probe(tag)?;
+        // TODO: Should map errors to more specific message
         let (data, size) = T::deserialize(&buf)
-            .map_err(|_| Error::DeserializeError)?;
+            .map_err(|err| Error::DeserializeError)?;
         Ok(data)
     }
 
@@ -94,14 +95,14 @@ pub struct IovecScope<'scope, 'env: 'scope> {
 
 impl<'scope, 'env> IovecScope<'scope, 'env> {
     /// Do a non-blocking send, returning the request index.
-    pub fn isend<T>(&mut self, data: &'scope T, tag: Tag) -> Result<usize>
+    pub fn isend<T>(&mut self, data: &'scope [T], tag: Tag) -> Result<usize>
     where
         T: ChunkSerDe,
     {
         unsafe {
             let i = self.requests.len();
             let mut chunks = vec![];
-            data.serialize(&mut chunks)
+            T::serialize(data, &mut chunks)
                 .map_err(|_| Error::SerializeError)?;
             let chunks = Box::new(chunks);
             let chunks = Box::into_raw(chunks);
@@ -144,7 +145,7 @@ impl<'scope, 'env> IovecScope<'scope, 'env> {
         Ok(i)
     }
 
-    pub fn data<T>(&self, req: usize) -> Option<T>
+    pub fn data<T>(&self, req: usize) -> Option<Vec<T>>
     where
         T: ChunkSerDe,
     {

@@ -3,7 +3,6 @@ use clap::Parser;
 use serde::{Serialize, de::DeserializeOwned};
 use safe_mpi;
 use benchmarks::{
-    latency,
     LatencyOptions,
     SerdeArgs,
     SerKind,

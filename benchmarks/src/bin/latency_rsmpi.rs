@@ -2,7 +2,7 @@ use clap::Parser;
 use mpi::{
     self,
     traits::{Communicator, Equivalence},
-    point_to_point::{Source, Destination, Status},
+    point_to_point::{Source, Destination},
 };
 use benchmarks::{
     RsmpiArgs,

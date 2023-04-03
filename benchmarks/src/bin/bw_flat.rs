@@ -34,12 +34,12 @@ where
             world.scope(|scope| {
                 let mut reqs = vec![];
                 if rank == 0 {
-                    for j in 0..window_size {
+                    for _ in 0..window_size {
                         reqs.push(scope.isend(sbuf, 0).unwrap());
                     }
                 } else {
                     let mut tmp = &mut rbufs[..];
-                    for j in 0..window_size {
+                    for _ in 0..window_size {
                         let (a, b) = tmp.split_at_mut(1);
                         tmp = b;
                         let req = scope
@@ -48,7 +48,7 @@ where
                         reqs.push(req);
                     }
                 }
-                wait_all(scope, &reqs[..]);
+                wait_all(scope, &reqs[..]).unwrap();
             });
             if rank == 0 {
                 world.recv(&mut ack_msg[..], 0).unwrap();
