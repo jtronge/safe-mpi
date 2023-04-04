@@ -15,12 +15,12 @@ scripts:
       env: {}
     iovec:
       script: './scripts/bw_iovec.sh'
-      env: {}
-        # UCX_POSIX_SEG_SIZE: '65536'
+      env:
+        UCX_POSIX_SEG_SIZE: '65536'
     rsmpi:
       script: './scripts/bw_rsmpi.sh'
       env: {}
     flat:
       script: './scripts/bw_flat.sh'
-      env: {}
-        # UCX_POSIX_SEG_SIZE: '65536'
+      env:
+        UCX_POSIX_SEG_SIZE: '65536'
