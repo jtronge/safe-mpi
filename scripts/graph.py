@@ -19,6 +19,7 @@ def graph_latency(config, tests):
     ax.set_title(f'latency: {config}')
     ax.set_xlabel('size (bytes)')
     ax.set_ylabel('latency (μs)')
+    ax.grid(visible=True)
     for test_name, results in tests.items():
         sizes = sorted(int(size) for size in results)
         sizes = [str(size) for size in sizes]
@@ -34,6 +35,7 @@ def graph_bw(config, tests):
     ax.set_title(f'bandwidth: {config}')
     ax.set_xlabel('size (bytes)')
     ax.set_ylabel('bandwidth (MB/s)')
+    ax.grid(visible=True)
     for test_name, results in tests.items():
         sizes = sorted(int(size) for size in results)
         sizes = [str(size) for size in sizes]
@@ -55,7 +57,9 @@ graphers = {
 with open(args.output) as fp:
     results = json.load(fp)
 
-plt.style.use('fivethirtyeight')
+plt.rcParams.update({
+    'lines.linewidth': 2,
+})
 for benchmark, configs in results.items():
     for config, tests in configs.items():
         graphers[benchmark](config, tests)
