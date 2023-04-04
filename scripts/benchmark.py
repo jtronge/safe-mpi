@@ -58,6 +58,7 @@ combiners = {
     'bw': combine_bw,
 }
 
+# TODO: Make this easy for two nodes?
 sbatch_scripts = {
     'latency': {
         # 'message-pack'
@@ -67,39 +68,39 @@ sbatch_scripts = {
         'rsmpi': './scripts/latency_rsmpi.sh',
     },
     'bw': {
-        'bincode': './scripts/bw_bincode.sh',
-        'iovec': './scripts/bw_iovec.sh',
-        'rsmpi': './scripts/bw_rsmpi.sh',
-        'flat': './scripts/bw_flat.sh',
+        'bincode': './scripts/bw_bincode_2_node.sh',
+        'iovec': './scripts/bw_iovec_2_node.sh',
+        'rsmpi': './scripts/bw_rsmpi_2_node.sh',
+        'flat': './scripts/bw_flat_2_node.sh',
     }
 }
 
 benchmarks = {
-    'latency': {
-        './params/latency/simple.yaml': [
-            #'message-pack',
-            #'postcard',
-            'flat',
-            'bincode',
-            'iovec',
-            'rsmpi',
-        ],
-        './params/latency/complex-noncompound.yaml': [
-            #'message-pack',
-            #'postcard',
-            'flat',
-            'bincode',
-            'iovec',
-            'rsmpi',
-        ],
-        './params/latency/complex-compound.yaml': [
-            #'message-pack',
-            #'postcard',
-            'bincode',
-            'iovec',
-            # rsmpi does not support complex-compound datatypes
-        ],
-    },
+#    'latency': {
+#        './params/latency/simple.yaml': [
+#            #'message-pack',
+#            #'postcard',
+#            'flat',
+#            'bincode',
+#            'iovec',
+#            'rsmpi',
+#        ],
+#        './params/latency/complex-noncompound.yaml': [
+#            #'message-pack',
+#            #'postcard',
+#            'flat',
+#            'bincode',
+#            'iovec',
+#            'rsmpi',
+#        ],
+#        './params/latency/complex-compound.yaml': [
+#            #'message-pack',
+#            #'postcard',
+#            'bincode',
+#            'iovec',
+#            # rsmpi does not support complex-compound datatypes
+#        ],
+#    },
     'bw': {
         './params/bw/complex-noncompound.yaml': [
             'iovec',
