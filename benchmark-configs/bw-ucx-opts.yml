@@ -17,12 +17,12 @@ scripts:
       script: './scripts/bw_iovec.sh'
       env:
         # UCX_POSIX_SEG_SIZE: '65536'
-        UCX_RNDV_THRESH: 64kb
+        UCX_RNDV_THRESH: 8kb
     rsmpi:
       script: './scripts/bw_rsmpi.sh'
       env: {}
     flat:
       script: './scripts/bw_flat.sh'
       env:
-        UCX_RNDV_THRESH: 64kb
+        UCX_RNDV_THRESH: 8kb
         # UCX_POSIX_SEG_SIZE: '65536'
