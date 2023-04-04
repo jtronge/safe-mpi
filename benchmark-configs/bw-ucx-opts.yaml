@@ -20,7 +20,8 @@ scripts:
         UCX_RNDV_THRESH: 2kb
     rsmpi:
       script: './scripts/bw_rsmpi.sh'
-      env: {}
+      env:
+        OMPI_MCA_pml: ucx
     flat:
       script: './scripts/bw_flat.sh'
       env:
