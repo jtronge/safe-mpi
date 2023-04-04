@@ -1,21 +1,11 @@
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 // use log::info;
 use crate::{
-    Result,
-    Error,
-    Handle,
-    Iov,
-    MutIov,
-    Tag,
     request::{
-        RequestStatus,
-        Request,
-        RecvIovRequest,
-        RecvProbeRequest,
-        SendIovRequest,
-        SendRequest,
+        RecvIovRequest, RecvProbeRequest, Request, RequestStatus, SendIovRequest, SendRequest,
     },
+    Error, Handle, Iov, MutIov, Result, Tag,
 };
 
 /// Data reference type for send request
@@ -34,9 +24,7 @@ pub struct Communicator {
 impl Communicator {
     /// Create a new communicator from a handle
     pub(crate) fn new(handle: Rc<RefCell<Handle>>) -> Communicator {
-        Communicator {
-            handle,
-        }
+        Communicator { handle }
     }
 
     // Duplicate this communicator

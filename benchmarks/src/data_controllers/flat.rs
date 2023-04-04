@@ -1,19 +1,12 @@
 //! Data controller for types that implement FlatBuffer.
+use crate::data_controllers::Progress;
+use flat::FlatBuffer;
+use safe_mpi::{
+    communicator::Communicator, Error, Iov, MutIov, Request as SRequest, RequestStatus, Result, Tag,
+};
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::os::raw::c_void;
-use safe_mpi::{
-    Result,
-    RequestStatus,
-    Request as SRequest,
-    Tag,
-    Error,
-    Iov,
-    MutIov,
-    communicator::Communicator,
-};
-use flat::FlatBuffer;
-use crate::data_controllers::Progress;
 
 pub struct FlatController {
     pub comm: Communicator,
@@ -21,9 +14,7 @@ pub struct FlatController {
 
 impl FlatController {
     pub fn new(comm: Communicator) -> FlatController {
-        FlatController {
-            comm,
-        }
+        FlatController { comm }
     }
 
     /// Send data from the buffer.
@@ -119,10 +110,7 @@ impl<'scope, 'env> FlatScope<'scope, 'env> {
                 Iov(count as *const u8, std::mem::size_of::<usize>()),
                 Iov(data.ptr(), data.size()),
             ];
-            let req = self.comm.isend_iov(
-                &iovecs,
-                tag,
-            )?;
+            let req = self.comm.isend_iov(&iovecs, tag)?;
             let req: Box<Box<dyn SRequest>> = Box::new(Box::new(req));
             let rptr = Box::into_raw(req) as *mut c_void;
             self.requests.push(Request {
@@ -143,9 +131,9 @@ impl<'scope, 'env> FlatScope<'scope, 'env> {
     {
         unsafe {
             let i = self.requests.len();
-            let mut type_id = Box::new(0u64);
+            let type_id = Box::new(0u64);
             let type_id = Box::into_raw(type_id);
-            let mut count = Box::new(0usize);
+            let count = Box::new(0usize);
             let count = Box::into_raw(count);
             let iovecs = vec![
                 MutIov(type_id as *mut _, std::mem::size_of::<u64>()),

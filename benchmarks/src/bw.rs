@@ -1,7 +1,7 @@
 //! Bandwidth benchmark code
-use std::time::Instant;
-use serde::Deserialize;
 use datatypes::DataType;
+use serde::Deserialize;
+use std::time::Instant;
 
 #[derive(Debug, Deserialize)]
 pub struct BandwidthOptions {
@@ -40,37 +40,22 @@ where
                 for k in 0..=opts.warmup_validation {
                     let start = Instant::now();
                     body(rank, opts.window_size, &s_buf);
-/*
-                    for j in 0..opts.window_size {
-                        req_window.push(isend(&s_buf));
-                    }
-                    wait_all(&mut req_window);
-                    recv();
-*/
                     if i >= opts.skip && k == opts.warmup_validation {
                         // The osu version includes another factor that I'm not
                         // sure is necessary
-                        total_time += Instant::now()
-                            .duration_since(start)
-                            .as_secs_f32();
+                        total_time += Instant::now().duration_since(start).as_secs_f32();
                     }
                 }
             } else {
-                for k in 0..=opts.warmup_validation {
+                for _ in 0..=opts.warmup_validation {
                     body(rank, opts.window_size, &s_buf);
-/*
-                    for j in 0..opts.window_size {
-                        req_window.push(irecv());
-                    }
-                    wait_all(&mut req_window);
-                    send();
-*/
                 }
             }
         }
         if rank == 0 {
-            let bandwidth = (size as f32 / 1.0e6 * opts.iterations as f32
-                             * opts.window_size as f32) / total_time;
+            let bandwidth =
+                (size as f32 / 1.0e6 * opts.iterations as f32 * opts.window_size as f32)
+                    / total_time;
             results.push((size, bandwidth));
         }
         size *= 2;

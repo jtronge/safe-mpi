@@ -1,16 +1,10 @@
-use std::os::raw::c_void;
+use crate::{Error, Result};
 use log::info;
+use std::os::raw::c_void;
 use ucx2_sys::{
-    rust_ucs_ptr_status,
-    rust_ucs_ptr_is_err,
-    rust_ucs_ptr_is_ptr,
-    ucp_worker_h,
-    ucp_worker_progress,
-    ucp_request_free,
-    UCS_OK,
-    UCS_INPROGRESS,
+    rust_ucs_ptr_is_err, rust_ucs_ptr_is_ptr, rust_ucs_ptr_status, ucp_request_free, ucp_worker_h,
+    ucp_worker_progress, UCS_INPROGRESS, UCS_OK,
 };
-use crate::{Result, Error};
 
 const TIMEOUT: usize = 8192;
 

@@ -1,21 +1,13 @@
-use std::os::raw::c_void;
-use serde::{Serialize, de::DeserializeOwned};
-use safe_mpi::{
-    Error,
-    Iov,
-    Request as SRequest,
-    RequestStatus,
-    Result,
-    Tag,
-    communicator::{
-        Communicator,
-        Data,
-    },
-};
 use crate::data_controllers::{
-    Progress,
     serde::{SerdeController, SerdeScope},
+    Progress,
 };
+use safe_mpi::{
+    communicator::{Communicator, Data},
+    Error, Iov, Request as SRequest, RequestStatus, Result, Tag,
+};
+use serde::{de::DeserializeOwned, Serialize};
+use std::os::raw::c_void;
 
 pub struct BincodeController {
     comm: Communicator,
@@ -23,9 +15,7 @@ pub struct BincodeController {
 
 impl BincodeController {
     pub fn new(comm: Communicator) -> BincodeController {
-        BincodeController {
-            comm,
-        }
+        BincodeController { comm }
     }
 }
 
@@ -37,8 +27,7 @@ impl SerdeController for BincodeController {
         T: Serialize + DeserializeOwned,
     {
         unsafe {
-            let buf = bincode::serialize(data)
-                .map_err(|_| Error::SerializeError)?;
+            let buf = bincode::serialize(data).map_err(|_| Error::SerializeError)?;
             let data = [Iov(buf.as_ptr(), buf.len())];
             self.comm.send(&data, tag)
         }
@@ -67,7 +56,7 @@ impl SerdeController for BincodeController {
 
 struct RequestData {
     rptr: *mut c_void,
-    data: Option<Vec<u8>>,
+    _data: Option<Vec<u8>>,
 }
 
 pub struct BincodeScope {
@@ -78,22 +67,20 @@ pub struct BincodeScope {
 impl SerdeScope for BincodeScope {
     fn isend<T>(&mut self, data: &T, tag: Tag) -> Result<usize>
     where
-        T: Serialize + DeserializeOwned
+        T: Serialize + DeserializeOwned,
     {
         unsafe {
             let i = self.requests.len();
-            let data = bincode::serialize(data)
-                .map_err(|_| Error::SerializeError)?;
+            let data = bincode::serialize(data).map_err(|_| Error::SerializeError)?;
             let data = Some(data);
-            let req = self.comm.isend(Data::Contiguous(data.as_ref().unwrap()), tag)?;
+            let req = self
+                .comm
+                .isend(Data::Contiguous(data.as_ref().unwrap()), tag)?;
             // This is valid as long as self.data[i] and self.requests[i] are
             // always freed at the same time
             let req: Box<Box<dyn SRequest>> = Box::new(Box::new(req));
             let rptr = Box::into_raw(req) as *mut c_void;
-            self.requests.push(RequestData {
-                rptr,
-                data,
-            });
+            self.requests.push(RequestData { rptr, _data: data });
             Ok(i)
         }
     }
@@ -103,10 +90,7 @@ impl SerdeScope for BincodeScope {
         let req = self.comm.irecv_probe(tag)?;
         let req: Box<Box<dyn SRequest>> = Box::new(Box::new(req));
         let rptr = Box::into_raw(req) as *mut c_void;
-        self.requests.push(RequestData {
-            rptr,
-            data: None,
-        });
+        self.requests.push(RequestData { rptr, _data: None });
         Ok(i)
     }
 

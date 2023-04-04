@@ -1,6 +1,6 @@
+use iovec::{add_length_header, check_length_header, Chunk, ChunkSerDe, Result};
 use std::slice::from_raw_parts;
 use ucx2_sys::ucp_dt_iov;
-use iovec::{Chunk, ChunkSerDe, Result, add_length_header, check_length_header};
 
 #[derive(Debug)]
 struct A {
@@ -15,28 +15,22 @@ impl ChunkSerDe for A {
         unsafe {
             add_length_header(chunks, data.len());
             for elm in data {
-                chunks.push(Chunk::Slice(
-                    from_raw_parts(
-                        std::ptr::addr_of!(elm.x) as *const _,
-                        std::mem::size_of::<u32>(),
-                    )
-                ));
-                chunks.push(Chunk::Slice(
-                    from_raw_parts(
-                        elm.y.as_ptr() as *const _,
-                        elm.y.len() * std::mem::size_of::<f64>(),
-                    )
-                ));
+                chunks.push(Chunk::Slice(from_raw_parts(
+                    std::ptr::addr_of!(elm.x) as *const _,
+                    std::mem::size_of::<u32>(),
+                )));
+                chunks.push(Chunk::Slice(from_raw_parts(
+                    elm.y.as_ptr() as *const _,
+                    elm.y.len() * std::mem::size_of::<f64>(),
+                )));
                 // First the length
                 let len = elm.data.len().to_be_bytes().to_vec();
                 chunks.push(Chunk::Data(len));
                 // Now the data
-                chunks.push(Chunk::Slice(
-                    from_raw_parts(
-                        elm.data.as_ptr() as *const _,
-                        elm.data.len() * std::mem::size_of::<f64>(),
-                    )
-                ));
+                chunks.push(Chunk::Slice(from_raw_parts(
+                    elm.data.as_ptr() as *const _,
+                    elm.data.len() * std::mem::size_of::<f64>(),
+                )));
             }
             Ok(())
         }
@@ -55,7 +49,8 @@ impl ChunkSerDe for A {
                 let ptr = ptr.offset(1) as *const u8;
                 let len_slice = std::slice::from_raw_parts(ptr, std::mem::size_of::<usize>());
                 let len = usize::from_be_bytes(len_slice.try_into().unwrap());
-                let mut ptr = ptr.offset(std::mem::size_of::<usize>().try_into().unwrap()) as *const f64;
+                let mut ptr =
+                    ptr.offset(std::mem::size_of::<usize>().try_into().unwrap()) as *const f64;
                 let mut sdata = Vec::new();
                 sdata.reserve(len);
                 for _ in 0..len {
@@ -63,15 +58,11 @@ impl ChunkSerDe for A {
                     ptr = ptr.offset(1);
                 }
                 let used = std::mem::size_of::<u32>()
-                           + 4 * std::mem::size_of::<f64>()
-                           + std::mem::size_of::<usize>()
-                           + len * std::mem::size_of::<f64>();
+                    + 4 * std::mem::size_of::<f64>()
+                    + std::mem::size_of::<usize>()
+                    + len * std::mem::size_of::<f64>();
                 data = &data[used..];
-                out.push(A {
-                    x,
-                    y,
-                    data: sdata,
-                });
+                out.push(A { x, y, data: sdata });
             }
         }
         Ok((out, &data[..]))
@@ -79,13 +70,11 @@ impl ChunkSerDe for A {
 }
 
 fn main() {
-    let a = [
-        A {
-            x: 8,
-            y: [1.0, 6.7, 8.9, 11.0],
-            data: vec![133.4, 44.90, 7.8],
-        },
-    ];
+    let a = [A {
+        x: 8,
+        y: [1.0, 6.7, 8.9, 11.0],
+        data: vec![133.4, 44.90, 7.8],
+    }];
 
     let mut chunks = vec![];
     A::serialize(&a, &mut chunks).unwrap();

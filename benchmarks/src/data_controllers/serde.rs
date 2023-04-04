@@ -1,12 +1,6 @@
-use serde::{
-    Serialize,
-    de::DeserializeOwned,
-};
-use safe_mpi::{
-    Result,
-    Tag,
-};
 use crate::data_controllers::Progress;
+use safe_mpi::{Result, Tag};
+use serde::{de::DeserializeOwned, Serialize};
 
 pub trait SerdeController {
     type Scope: SerdeScope;
@@ -32,5 +26,7 @@ pub trait SerdeScope: Progress {
 
     fn irecv(&mut self, tag: Tag) -> Result<<Self as Progress>::Request>;
 
-    fn data<T>(&self, req: <Self as Progress>::Request) -> Option<T> where T: Serialize + DeserializeOwned;
+    fn data<T>(&self, req: <Self as Progress>::Request) -> Option<T>
+    where
+        T: Serialize + DeserializeOwned;
 }

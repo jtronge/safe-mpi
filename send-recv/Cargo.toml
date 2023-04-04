@@ -1,8 +1,0 @@
-[package]
-name = "ucp-client-server"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-ucx = { path = "../ucx" }
-nix = "0.26.1"

@@ -1,15 +1,11 @@
-use std::net::SocketAddr;
-use clap::Parser;
 use benchmarks::{
-    IovecArgs,
-    BandwidthOptions,
-    data_controllers::{
-        FlatController,
-        wait_all,
-    },
+    data_controllers::{wait_all, FlatController},
+    BandwidthOptions, IovecArgs,
 };
+use clap::Parser;
 use datatypes::DataType;
 use flat::FlatBuffer;
+use std::net::SocketAddr;
 
 fn benchmark<T, P>(args: IovecArgs, opts: BandwidthOptions, prepare: P) -> Vec<(usize, f32)>
 where
@@ -17,8 +13,7 @@ where
     P: Fn(usize) -> Vec<T>,
 {
     let sockaddr = SocketAddr::from((args.address.octets(), args.port));
-    let sm = safe_mpi::init(sockaddr, args.server)
-        .expect("Failed to initialize safe_mpi");
+    let sm = safe_mpi::init(sockaddr, args.server).expect("Failed to initialize safe_mpi");
     let world = FlatController::new(sm.world());
 
     let rank = if args.server { 0 } else { 1 };
@@ -26,37 +21,30 @@ where
     let mut rbufs: Vec<Vec<T>> = (0..opts.window_size)
         .map(|_| (0..opts.max_size).map(|_| T::default()).collect())
         .collect();
-    benchmarks::bw(
-        opts,
-        rank,
-        prepare,
-        |rank, window_size, sbuf| {
-            world.scope(|scope| {
-                let mut reqs = vec![];
-                if rank == 0 {
-                    for _ in 0..window_size {
-                        reqs.push(scope.isend(sbuf, 0).unwrap());
-                    }
-                } else {
-                    let mut tmp = &mut rbufs[..];
-                    for _ in 0..window_size {
-                        let (a, b) = tmp.split_at_mut(1);
-                        tmp = b;
-                        let req = scope
-                            .irecv(&mut a[0][..sbuf.len()], 0)
-                            .unwrap();
-                        reqs.push(req);
-                    }
-                }
-                wait_all(scope, &reqs[..]).unwrap();
-            });
+    benchmarks::bw(opts, rank, prepare, |rank, window_size, sbuf| {
+        world.scope(|scope| {
+            let mut reqs = vec![];
             if rank == 0 {
-                world.recv(&mut ack_msg[..], 0).unwrap();
+                for _ in 0..window_size {
+                    reqs.push(scope.isend(sbuf, 0).unwrap());
+                }
             } else {
-                world.send(&ack_msg[..], 0).unwrap();
+                let mut tmp = &mut rbufs[..];
+                for _ in 0..window_size {
+                    let (a, b) = tmp.split_at_mut(1);
+                    tmp = b;
+                    let req = scope.irecv(&mut a[0][..sbuf.len()], 0).unwrap();
+                    reqs.push(req);
+                }
             }
-        },
-    )
+            wait_all(scope, &reqs[..]).unwrap();
+        });
+        if rank == 0 {
+            world.recv(&mut ack_msg[..], 0).unwrap();
+        } else {
+            world.send(&ack_msg[..], 0).unwrap();
+        }
+    })
 }
 
 fn main() {

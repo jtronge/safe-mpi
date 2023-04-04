@@ -1,20 +1,10 @@
-use serde::{Serialize, de::DeserializeOwned};
-use postcard;
-use safe_mpi::{
-    Result,
-    Error,
-    Tag,
-    RequestStatus,
-    Iov,
-    communicator::{
-        Communicator,
-        Data,
-    },
-};
 use crate::data_controllers::{
-    Progress,
     serde::{SerdeController, SerdeScope},
+    Progress,
 };
+use postcard;
+use safe_mpi::{communicator::Communicator, Error, Iov, RequestStatus, Result, Tag};
+use serde::{de::DeserializeOwned, Serialize};
 
 pub struct PostcardController {
     pub comm: Communicator,
@@ -22,9 +12,7 @@ pub struct PostcardController {
 
 impl PostcardController {
     pub fn new(comm: Communicator) -> PostcardController {
-        PostcardController {
-            comm,
-        }
+        PostcardController { comm }
     }
 }
 
@@ -36,8 +24,7 @@ impl SerdeController for PostcardController {
         T: Serialize + DeserializeOwned,
     {
         unsafe {
-            let buf = postcard::to_allocvec(data)
-                .map_err(|_| Error::SerializeError)?;
+            let buf = postcard::to_allocvec(data).map_err(|_| Error::SerializeError)?;
             let data = [Iov(buf.as_ptr() as *const _, buf.len())];
             self.comm.send(&data, tag)
         }
@@ -48,8 +35,7 @@ impl SerdeController for PostcardController {
         T: Serialize + DeserializeOwned,
     {
         let buf = self.comm.recv_probe(tag)?;
-        postcard::from_bytes(&buf)
-            .map_err(|_| Error::DeserializeError)
+        postcard::from_bytes(&buf).map_err(|_| Error::DeserializeError)
     }
 
     fn scope<F, R>(&self, f: F) -> R
@@ -63,18 +49,18 @@ impl SerdeController for PostcardController {
 pub struct PostcardScope;
 
 impl SerdeScope for PostcardScope {
-    fn isend<T>(&mut self, data: &T, tag: Tag) -> Result<usize>
+    fn isend<T>(&mut self, _data: &T, _tag: Tag) -> Result<usize>
     where
-        T: Serialize + DeserializeOwned
+        T: Serialize + DeserializeOwned,
     {
         Ok(0)
     }
 
-    fn irecv(&mut self, tag: Tag) -> Result<usize> {
+    fn irecv(&mut self, _tag: Tag) -> Result<usize> {
         Ok(0)
     }
 
-    fn data<T>(&self, req: usize) -> Option<T>
+    fn data<T>(&self, _req: usize) -> Option<T>
     where
         T: Serialize + DeserializeOwned,
     {
@@ -85,7 +71,7 @@ impl SerdeScope for PostcardScope {
 impl Progress for PostcardScope {
     type Request = usize;
 
-    fn progress(&mut self, req: Self::Request) -> Result<RequestStatus> {
+    fn progress(&mut self, _req: Self::Request) -> Result<RequestStatus> {
         Ok(RequestStatus::InProgress)
     }
 }

@@ -1,12 +1,8 @@
-use std::net::SocketAddr;
+use benchmarks::{data_controllers::FlatController, IovecArgs, LatencyOptions};
 use clap::Parser;
-use benchmarks::{
-    LatencyOptions,
-    IovecArgs,
-    data_controllers::FlatController,
-};
 use datatypes::DataType;
 use flat::FlatBuffer;
+use std::net::SocketAddr;
 
 fn benchmark<T, P>(args: IovecArgs, opts: LatencyOptions, prepare: P) -> Vec<(usize, f32)>
 where
@@ -14,18 +10,13 @@ where
     P: Fn(usize) -> Vec<T>,
 {
     let sockaddr = SocketAddr::from((args.address.octets(), args.port));
-    let sm = safe_mpi::init(sockaddr, args.server)
-        .expect("Failed to initialize safe_mpi");
+    let sm = safe_mpi::init(sockaddr, args.server).expect("Failed to initialize safe_mpi");
     let world = FlatController::new(sm.world());
 
     let rank = if args.server { 0 } else { 1 };
     // Set up the receive buffers
-    let mut rbuf0: Vec<T> = (0..opts.max_size)
-        .map(|_| T::default())
-        .collect();
-    let mut rbuf1: Vec<T> = (0..opts.max_size)
-        .map(|_| T::default())
-        .collect();
+    let mut rbuf0: Vec<T> = (0..opts.max_size).map(|_| T::default()).collect();
+    let mut rbuf1: Vec<T> = (0..opts.max_size).map(|_| T::default()).collect();
     benchmarks::latency(
         opts,
         rank.try_into().unwrap(),

@@ -1,9 +1,5 @@
 use std::os::raw::c_void;
-use ucx2_sys::{
-    ucp_tag_recv_info_t,
-    ucs_status_t,
-    UCS_OK,
-};
+use ucx2_sys::{ucp_tag_recv_info_t, ucs_status_t, UCS_OK};
 
 pub(crate) unsafe extern "C" fn send_nbx_callback(
     _req: *mut c_void,

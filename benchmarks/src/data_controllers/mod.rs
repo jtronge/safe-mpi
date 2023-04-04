@@ -11,10 +11,7 @@ pub use self::serde::{SerdeController, SerdeScope};
 mod flat;
 pub use self::flat::FlatController;
 
-use safe_mpi::{
-    Result,
-    RequestStatus,
-};
+use safe_mpi::{RequestStatus, Result};
 
 pub trait Progress {
     type Request: Copy;

@@ -1,22 +1,13 @@
-use std::net::Ipv4Addr;
+use clap::{Parser, ValueEnum};
 use serde::de::DeserializeOwned;
+use std::net::Ipv4Addr;
 use std::path::Path;
-use clap::{
-    Parser,
-    ValueEnum,
-};
 
 pub mod data_controllers;
 mod latency;
-pub use latency::{
-    latency,
-    LatencyOptions,
-};
+pub use latency::{latency, LatencyOptions};
 mod bw;
-pub use bw::{
-    bw,
-    BandwidthOptions,
-};
+pub use bw::{bw, BandwidthOptions};
 
 /// Arguments for the serde benchmarks
 #[derive(Parser)]
@@ -84,7 +75,6 @@ where
     P: AsRef<Path>,
     T: DeserializeOwned,
 {
-    serde_yaml::from_reader(
-        std::fs::File::open(path).map_err(|_| BenchmarkError::IOError)?
-    ).map_err(|_| BenchmarkError::DeserializeError)
+    serde_yaml::from_reader(std::fs::File::open(path).map_err(|_| BenchmarkError::IOError)?)
+        .map_err(|_| BenchmarkError::DeserializeError)
 }

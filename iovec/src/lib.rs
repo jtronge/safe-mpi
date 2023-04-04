@@ -1,6 +1,6 @@
+use std::any::TypeId;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::any::TypeId;
 
 #[derive(Debug)]
 pub enum Chunk<'a> {
@@ -86,10 +86,8 @@ macro_rules! impl_chunkserde {
                     add_type_id_header::<$ty>(chunks);
                     add_length_header(chunks, data.len());
                     let ptr = data.as_ptr() as *const u8;
-                    let slice = std::slice::from_raw_parts(
-                        ptr,
-                        data.len() * std::mem::size_of::<$ty>(),
-                    );
+                    let slice =
+                        std::slice::from_raw_parts(ptr, data.len() * std::mem::size_of::<$ty>());
                     chunks.push(Chunk::Slice(slice));
                     Ok(())
                 }
@@ -106,14 +104,11 @@ macro_rules! impl_chunkserde {
                         ptr = ptr.offset(1);
                     }
                     let used = std::mem::size_of::<$ty>() * len;
-                    Ok((
-                        out,
-                        &data[used..]
-                    ))
+                    Ok((out, &data[used..]))
                 }
             }
         }
-    }
+    };
 }
 
 impl_chunkserde!(i32);

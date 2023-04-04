@@ -1,16 +1,10 @@
+use benchmarks::{LatencyOptions, RsmpiArgs};
 use clap::Parser;
+use datatypes::{self, DataType};
 use mpi::{
     self,
+    point_to_point::{Destination, Source},
     traits::{Communicator, Equivalence},
-    point_to_point::{Source, Destination},
-};
-use benchmarks::{
-    RsmpiArgs,
-    LatencyOptions,
-};
-use datatypes::{
-    self,
-    DataType,
 };
 
 fn benchmark<T, P, C>(opts: LatencyOptions, rank: i32, prepare: P, comm: C) -> Vec<(usize, f32)>
@@ -21,31 +15,19 @@ where
 {
     let next_rank = (rank + 1) % 2;
     // Set up the receive buffers
-    let mut rbuf0: Vec<T> = (0..opts.max_size)
-        .map(|_| T::default())
-        .collect();
-    let mut rbuf1: Vec<T> = (0..opts.max_size)
-        .map(|_| T::default())
-        .collect();
+    let mut rbuf0: Vec<T> = (0..opts.max_size).map(|_| T::default()).collect();
+    let mut rbuf1: Vec<T> = (0..opts.max_size).map(|_| T::default()).collect();
     benchmarks::latency(
         opts,
         rank.try_into().unwrap(),
         prepare,
         |s_buf| {
-            comm
-                .process_at_rank(next_rank)
-                .send(&s_buf[..]);
-            let _ = comm
-                .process_at_rank(next_rank)
-                .receive_into(&mut rbuf0);
+            comm.process_at_rank(next_rank).send(&s_buf[..]);
+            let _ = comm.process_at_rank(next_rank).receive_into(&mut rbuf0);
         },
         |s_buf| {
-            let _ = comm
-                .process_at_rank(next_rank)
-                .receive_into(&mut rbuf1);
-            comm
-                .process_at_rank(next_rank)
-                .send(&s_buf[..]);
+            let _ = comm.process_at_rank(next_rank).receive_into(&mut rbuf1);
+            comm.process_at_rank(next_rank).send(&s_buf[..]);
         },
     )
 }

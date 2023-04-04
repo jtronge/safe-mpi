@@ -1,43 +1,38 @@
-use log::{error, info, debug};
+use log::{debug, error, info};
+use serde_json;
+use std::cell::RefCell;
+use std::ffi::CStr;
+use std::io::Write;
+use std::mem::MaybeUninit;
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
+use std::rc::Rc;
+use std::result::Result as StandardResult;
 use ucx2_sys::{
     rust_ucp_init,
     ucp_address_t,
     ucp_cleanup,
     ucp_context_h,
-    ucp_ep_h,
     ucp_ep_close_nb,
+    ucp_ep_h,
     ucp_params_t,
     ucp_tag_t,
-    ucp_worker_h,
     ucp_worker_create,
     ucp_worker_destroy,
     ucp_worker_get_address,
+    ucp_worker_h,
     ucp_worker_params_t,
     ucp_worker_release_address,
-    UCP_WORKER_PARAM_FIELD_THREAD_MODE,
-    ucs_status_t,
     ucs_status_string,
+    ucs_status_t,
     // UCP_EP_CLOSE_MODE_FLUSH,
     UCP_EP_CLOSE_MODE_FORCE,
-    UCP_FEATURE_TAG,
     UCP_FEATURE_STREAM,
+    UCP_FEATURE_TAG,
     UCP_PARAM_FIELD_FEATURES,
-    UCS_THREAD_MODE_SINGLE,
+    UCP_WORKER_PARAM_FIELD_THREAD_MODE,
     UCS_OK,
+    UCS_THREAD_MODE_SINGLE,
 };
-use std::ffi::CStr;
-use std::io::Write;
-use std::mem::MaybeUninit;
-use std::net::{
-    TcpListener,
-    TcpStream,
-    SocketAddr,
-    Shutdown,
-};
-use std::rc::Rc;
-use std::cell::RefCell;
-use std::result::Result as StandardResult;
-use serde_json;
 
 pub type Tag = ucp_tag_t;
 
@@ -101,6 +96,7 @@ impl Drop for Handle {
 pub type Result<T> = StandardResult<T, Error>;
 
 /// Initialize the safe mpi context.
+#[allow(clippy::uninit_assumed_init)]
 pub fn init(sockaddr: SocketAddr, server: bool) -> Result<Context> {
     // Initialize logging
     env_logger::init();
@@ -118,19 +114,18 @@ pub fn init(sockaddr: SocketAddr, server: bool) -> Result<Context> {
             let context = context.assume_init();
             let worker = create_worker(context)?;
             let other_addr = exchange_addrs(context, worker, server, sockaddr)?;
-            Ok(Context::new(
-                Rc::new(RefCell::new(Handle {
-                    context,
-                    worker,
-                    other_addr,
-                    endpoint: None,
-                })),
-            ))
+            Ok(Context::new(Rc::new(RefCell::new(Handle {
+                context,
+                worker,
+                other_addr,
+                endpoint: None,
+            }))))
         }
     }
 }
 
 /// Create the worker.
+#[allow(clippy::uninit_assumed_init)]
 unsafe fn create_worker(context: ucp_context_h) -> Result<ucp_worker_h> {
     // First create the worker
     let mut worker = MaybeUninit::<ucp_worker_h>::uninit();
@@ -156,8 +151,7 @@ unsafe fn exchange_addrs(
     // Get the address of the worker
     let mut address = MaybeUninit::<*mut ucp_address_t>::uninit();
     let mut addrlen = MaybeUninit::<usize>::uninit();
-    let status = ucp_worker_get_address(worker, address.as_mut_ptr(),
-                                        addrlen.as_mut_ptr());
+    let status = ucp_worker_get_address(worker, address.as_mut_ptr(), addrlen.as_mut_ptr());
     if status != UCS_OK {
         return Err(Error::WorkerAddressFailure(status));
     }
@@ -172,25 +166,29 @@ unsafe fn exchange_addrs(
 }
 
 /// Do the actual exchange and return the address of the other process.
-unsafe fn get_other_addr(server: bool, sockaddr: SocketAddr, address: *const ucp_address_t, addrlen: usize) -> Result<Vec<u8>> {
+unsafe fn get_other_addr(
+    server: bool,
+    sockaddr: SocketAddr,
+    address: *const ucp_address_t,
+    addrlen: usize,
+) -> Result<Vec<u8>> {
     // TODO: Use bincode here
     let saddr = std::slice::from_raw_parts(address as *const u8, addrlen);
     // TODO: There has to be a better way to do this, instead of using two
     //       connections in a row.
     if server {
-        let listener = TcpListener::bind(sockaddr)
-            .expect("Failed to bind TCP listener");
+        let listener = TcpListener::bind(sockaddr).expect("Failed to bind TCP listener");
         // First connection
-        let (mut stream, _) = listener.accept()
+        let (mut stream, _) = listener
+            .accept()
             .expect("Failed to accept a client connection");
         // Receive the other address and then send ours
-        let addr_bytes: Vec<u8> = serde_json::from_reader(&mut stream)
-            .expect("Failed to parse incoming address data");
+        let addr_bytes: Vec<u8> =
+            serde_json::from_reader(&mut stream).expect("Failed to parse incoming address data");
         debug!("addr_bytes: {:?}", addr_bytes);
         // Second connection
         // Now to send the server's address
-        serde_json::to_writer(&mut stream, saddr)
-            .expect("Failed to send address data");
+        serde_json::to_writer(&mut stream, saddr).expect("Failed to send address data");
         stream.flush().expect("Failed to flush stream");
         Ok(addr_bytes)
     } else {
@@ -198,14 +196,14 @@ unsafe fn get_other_addr(server: bool, sockaddr: SocketAddr, address: *const ucp
         let mut stream = TcpStream::connect(sockaddr)
             .expect("Failed to connect to server for ucp address exchange");
         // Send our address and then receive the other one
-        serde_json::to_writer(&mut stream, saddr)
-            .expect("Failed to send address data");
+        serde_json::to_writer(&mut stream, saddr).expect("Failed to send address data");
         stream.flush().expect("Failed to flush stream");
-        stream.shutdown(Shutdown::Write)
+        stream
+            .shutdown(Shutdown::Write)
             .expect("Failed to shutdown stream");
         info!("Wrote address data");
-        let addr_bytes = serde_json::from_reader(&mut stream)
-            .expect("Failed to parse incoming address data");
+        let addr_bytes =
+            serde_json::from_reader(&mut stream).expect("Failed to parse incoming address data");
         Ok(addr_bytes)
     }
 }

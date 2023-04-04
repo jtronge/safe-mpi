@@ -1,7 +1,3 @@
-use bindgen;
-use pkg_config;
-use cc;
-
 use std::env;
 use std::path::PathBuf;
 
@@ -13,7 +9,10 @@ fn main() {
 
     // Set the proper link paths
     for link_path in ucx.link_paths {
-        println!("cargo:rustc-link-search={}", link_path.as_os_str().to_str().unwrap());
+        println!(
+            "cargo:rustc-link-search={}",
+            link_path.as_os_str().to_str().unwrap()
+        );
     }
     println!("cargo:rerun-if-changed=src/ucx.h");
     println!("cargo:rerun-if-changed=src/ucx.c");

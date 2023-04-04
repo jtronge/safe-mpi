@@ -1,10 +1,5 @@
+use serde::de::{Deserialize, Deserializer, Error, Visitor};
 use std::convert::TryFrom;
-use serde::de::{
-    Deserialize,
-    Deserializer,
-    Visitor,
-    Error,
-};
 
 #[derive(Clone, Debug)]
 pub enum DataType {
@@ -13,11 +8,7 @@ pub enum DataType {
     ComplexCompound,
 }
 
-const ALLOWED: &'static [&'static str] = &[
-    "simple",
-    "complex-noncompound",
-    "complex-compound",
-];
+const ALLOWED: &'static [&'static str] = &["simple", "complex-noncompound", "complex-compound"];
 
 struct DataTypeVisitor;
 

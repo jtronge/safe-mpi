@@ -1,7 +1,7 @@
 //! Latency benchmark code
-use std::time::Instant;
-use serde::Deserialize;
 use datatypes::DataType;
+use serde::Deserialize;
+use std::time::Instant;
 
 #[derive(Debug, Deserialize)]
 pub struct LatencyOptions {
@@ -45,13 +45,11 @@ where
                     let start = Instant::now();
                     body0(&data);
                     if i >= opts.skip && j == opts.warmup_validation {
-                        total_time += Instant::now()
-                            .duration_since(start)
-                            .as_secs_f32();
+                        total_time += Instant::now().duration_since(start).as_secs_f32();
                     }
                 }
             } else {
-                for j in 0..=opts.warmup_validation {
+                for _ in 0..=opts.warmup_validation {
                     body1(&data);
                 }
             }

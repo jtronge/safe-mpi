@@ -45,7 +45,7 @@ macro_rules! impl_flat_primitive {
                 hasher.finish()
             }
         }
-    }
+    };
 }
 
 impl_flat_primitive!(bool);

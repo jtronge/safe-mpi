@@ -1,22 +1,14 @@
 //! Rsmpi bandwidth benchmark
+use benchmarks::{BandwidthOptions, RsmpiArgs};
 use clap::Parser;
-use benchmarks::{
-    RsmpiArgs,
-    BandwidthOptions,
-};
+use datatypes::{self, DataType};
 use mpi::{
     self,
+    point_to_point::{Destination, Source},
     traits::{Communicator, Equivalence},
-    point_to_point::{Source, Destination},
 };
-use datatypes::{self, DataType};
 
-fn benchmark<T, P, C>(
-    opts: BandwidthOptions,
-    rank: i32,
-    prepare: P,
-    comm: C,
-) -> Vec<(usize, f32)>
+fn benchmark<T, P, C>(opts: BandwidthOptions, rank: i32, prepare: P, comm: C) -> Vec<(usize, f32)>
 where
     T: Equivalence + Default,
     P: Fn(usize) -> Vec<T>,
@@ -45,10 +37,7 @@ where
                     for _ in 0..window_size {
                         let (a, b) = tmp.split_at_mut(1);
                         tmp = b;
-                        let rreq = proc.immediate_receive_into(
-                            scope,
-                            &mut a[0][..sbuf.len()],
-                        );
+                        let rreq = proc.immediate_receive_into(scope, &mut a[0][..sbuf.len()]);
                         coll.add(rreq);
                     }
                 }

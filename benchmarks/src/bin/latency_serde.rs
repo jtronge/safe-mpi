@@ -1,19 +1,14 @@
-use std::net::SocketAddr;
-use clap::Parser;
-use serde::{Serialize, de::DeserializeOwned};
-use safe_mpi;
 use benchmarks::{
-    LatencyOptions,
-    SerdeArgs,
-    SerKind,
     data_controllers::{
-        SerdeController,
-        BincodeController,
-        MessagePackController,
-        PostcardController,
+        BincodeController, MessagePackController, PostcardController, SerdeController,
     },
+    LatencyOptions, SerKind, SerdeArgs,
 };
+use clap::Parser;
 use datatypes::DataType;
+use safe_mpi;
+use serde::{de::DeserializeOwned, Serialize};
+use std::net::SocketAddr;
 
 fn serde_latency<T, P, S>(
     opts: LatencyOptions,
@@ -47,8 +42,7 @@ where
     P: Fn(usize) -> Vec<T>,
 {
     let sockaddr = SocketAddr::from((args.address.octets(), args.port));
-    let sm = safe_mpi::init(sockaddr, args.server)
-        .expect("Failed to initialize safe_mpi");
+    let sm = safe_mpi::init(sockaddr, args.server).expect("Failed to initialize safe_mpi");
     let world = sm.world();
 
     let rank = if args.server { 0 } else { 1 };

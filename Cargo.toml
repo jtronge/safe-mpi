@@ -1,8 +1,6 @@
 [workspace]
 members = [
     "ucx2-sys",
-    "ucx",
-    "send-recv",
     "safe-mpi",
     "msgpk-test",
     "iovec",

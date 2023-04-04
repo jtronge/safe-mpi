@@ -1,8 +1,5 @@
-use serde::{Serialize, Deserialize};
-use rmp_serde::{
-    self,
-    encode,
-};
+use rmp_serde::{self, encode};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct A {
@@ -11,7 +8,10 @@ struct A {
 }
 
 fn main() {
-    let a = A { x: 6, y: [1.0, 3.6] };
+    let a = A {
+        x: 6,
+        y: [1.0, 3.6],
+    };
 
     let mut data = vec![];
     encode::write(&mut data, &a).unwrap();
