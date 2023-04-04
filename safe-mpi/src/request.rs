@@ -427,7 +427,7 @@ impl Request for RecvProbeRequest {
                 let mut info = MaybeUninit::<ucp_tag_recv_info_t>::uninit();
                 // Probe for the message
                 let message = ucp_tag_probe_nb(worker, self.tag, 0, 1, info.as_mut_ptr());
-                if message.is_null() {
+                if !message.is_null() {
                     // Message probed, go ahead and allocate everything and
                     // start the receive.
                     self.state = RecvProbeRequestState::Wait;
