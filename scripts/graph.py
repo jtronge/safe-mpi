@@ -57,9 +57,7 @@ graphers = {
 with open(args.output) as fp:
     results = json.load(fp)
 
-plt.rcParams.update({
-    'lines.linewidth': 2,
-})
+plt.style.use('./poster.mplstyle')
 for benchmark, configs in results.items():
     for config, tests in configs.items():
         graphers[benchmark](config, tests)
