@@ -1,0 +1,28 @@
+benchmarks:
+  latency:
+    ./params/latency/complex-compound.yaml:
+      - bincode
+      - iovec
+    ./params/latency/complex-noncompound.yaml:
+      #message-pack
+      #postcard
+      - flat
+      - bincode
+      - iovec
+      - rsmpi
+scripts:
+  latency:
+    # message-pack
+    flat:
+      script: './scripts/latency_flat.sh'
+      env: {}
+    bincode:
+      script: './scripts/latency_bincode.sh'
+      env: {}
+    iovec:
+      script: './scripts/latency_iovec.sh'
+      env: {}
+    rsmpi:
+      script: './scripts/latency_rsmpi.sh'
+      env:
+        OMPI_MCA_pml: ucx
