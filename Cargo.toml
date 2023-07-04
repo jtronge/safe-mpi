@@ -8,4 +8,5 @@ members = [
     "datatypes",
     "flat",
     "flat-derive",
+    "multirank",
 ]

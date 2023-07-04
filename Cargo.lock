@@ -609,6 +609,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "multirank"
+version = "0.1.0"
+dependencies = [
+ "safe-mpi",
+ "serde",
+ "serde_yaml",
+]
+
+[[package]]
 name = "nalgebra"
 version = "0.32.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

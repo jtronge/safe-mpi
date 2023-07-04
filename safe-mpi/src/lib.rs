@@ -53,6 +53,7 @@ pub enum Error {
     FailedRequest(ucs_status_t),
     WorkerWait(ucs_status_t),
     DeserializeError,
+    NotImplemented,
     SerializeError,
     /// Timeout occured while waiting on a request
     RequestTimeout,
@@ -122,6 +123,14 @@ pub fn init(sockaddr: SocketAddr, server: bool) -> Result<Context> {
             }))))
         }
     }
+}
+
+/// Create a new context with multiple ranks.
+///
+/// `rank` is the rank of this process, and `conn_info` contains socket
+/// addresses for initial connection set up of each rank.
+pub fn init_multirank(rank: u32, conn_info: &[SocketAddr]) -> Result<Context> {
+    Err(Error::NotImplemented)
 }
 
 /// Create the worker.
