@@ -18,14 +18,22 @@ fn main() {
     println!("cargo:rerun-if-changed=src/ucx.c");
 
     // Generate and dump the bindings
-    let bindings = bindgen::Builder::default()
+    let builder = bindgen::Builder::default()
         .header("src/ucx.h")
         // Just ucp for now
         // .allowlist_function("ucp_.*")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-        .prepend_enum_name(false)
+        .prepend_enum_name(false);
+    // Make sure to add in the include paths
+    let mut clang_args = vec![];
+    for path in &ucx.include_paths {
+        clang_args.push(format!("-I{}", path.as_os_str().to_str().unwrap()));
+    }
+    let bindings = builder
+        .clang_args(clang_args)
         .generate()
         .expect("Failed to generate bindings");
+
     let mut path = PathBuf::from(env::var("OUT_DIR").unwrap());
     path.push("bindings.rs");
     bindings
