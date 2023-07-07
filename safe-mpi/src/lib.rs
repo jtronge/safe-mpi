@@ -35,6 +35,7 @@ use ucx2_sys::{
 };
 
 pub type Tag = ucp_tag_t;
+pub type Rank = u64;
 
 pub mod communicator;
 mod context;
@@ -43,6 +44,7 @@ mod util;
 use util::wait_loop;
 mod callbacks;
 mod request;
+mod provider;
 pub use request::{Request, RequestStatus};
 
 #[derive(Debug, Copy, Clone)]
