@@ -1,6 +1,6 @@
 iterations: 128
 skip: 16
 warmup_validation: 10
-min_size: 2
+min_size: 4
 max_size: 65536
 datatype: simple

@@ -32,22 +32,14 @@ def parse_bw(fname):
     return results
 
 
-def combine_latency(results):
-    """Combine and average multiple latency runs."""
-    data = {size: lat for size, lat in results[0]}
-    for result in results[1:]:
-        for size, lat in result:
-            data[size] += lat
-    return {size: total / len(results) for size, total in data.items()}
-
-
-def combine_bw(results):
-    """Combine and average multiple bandwidth runs."""
-    data = {size: bw for size, bw in results[0]}
-    for result in results[1:]:
-        for size, bw in result:
-            data[size] += bw
-    return {size: total / len(results) for size, total in data.items()}
+def finish_result(results):
+    """Process the result for later."""
+    size = [sz for sz, _ in results[0]]
+    data = [[val for _, val in res] for res in results]
+    return {
+        'size': size,
+        'data': data,
+    }
 
 
 def canonical_name(name):
@@ -62,11 +54,11 @@ parsers = {
     'bw': parse_bw,
 }
 
-# Combiners take a list of multiple outputs from the same benchmarks and
-# produce a combined result (typically an average)
-combiners = {
-    'latency': combine_latency,
-    'bw': combine_bw,
+# Finishers take a list of multiple outputs from the same benchmarks and
+# produce a result that can be more easily parsed
+finishers = {
+    'latency': finish_result,
+    'bw': finish_result,
 }
 
 # Temporary output location for sbatch scripts
@@ -121,8 +113,8 @@ for benchmark, configs in benchmarks.items():
                 parser = parsers[canonical_name(benchmark)]
                 results.append(parser(output))
             # Now combine the runs
-            combined_result = combiners[canonical_name(benchmark)](results)
-            config_result[test_name] = combined_result
+            finished_result = finishers[canonical_name(benchmark)](results)
+            config_result[test_name] = finished_result
 
         config_prefix = os.path.basename(config)
         config_prefix = config_prefix.split('.')[0]

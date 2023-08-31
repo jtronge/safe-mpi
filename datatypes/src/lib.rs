@@ -17,7 +17,7 @@ pub fn simple(size: usize) -> Vec<i32> {
 
 const X_ITEM_COUNT: usize = 16;
 
-#[derive(Serialize, Deserialize, Equivalence, FlatBuffer, Default)]
+#[derive(Serialize, Deserialize, Equivalence, FlatBuffer, Default, Clone)]
 pub struct ComplexNoncompound {
     i: i32,
     d: f64,
@@ -76,14 +76,12 @@ impl ChunkSerDe for ComplexNoncompound {
         unsafe {
             let data = check_type_id_header::<Self>(data)?;
             let (len, data) = check_length_header::<Self>(data)?;
-            let mut ptr = data.as_ptr() as *const ComplexNoncompound;
-            let mut out = vec![];
-            for _ in 0..len {
-                out.push(ptr.read_unaligned());
-                ptr = ptr.offset(1);
-            }
+            let addr = data.as_ptr() as usize;
+            assert_eq!(addr % std::mem::align_of::<ComplexNoncompound>(), 0);
+            let ptr = data.as_ptr() as *const ComplexNoncompound;
+            let slice = std::slice::from_raw_parts(ptr, len);
             let off = std::mem::size_of::<ComplexNoncompound>() * len;
-            Ok((out, &data[off..]))
+            Ok((slice.to_vec(), &data[off..]))
         }
     }
 }
