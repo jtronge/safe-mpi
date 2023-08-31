@@ -35,7 +35,9 @@ def parse_bw(fname):
 def finish_result(results):
     """Process the result for later."""
     size = [sz for sz, _ in results[0]]
+    print('results', results)
     data = [[val for _, val in res] for res in results]
+    print('data', data)
     return {
         'size': size,
         'data': data,
