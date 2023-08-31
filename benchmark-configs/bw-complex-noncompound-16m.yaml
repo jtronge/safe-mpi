@@ -1,0 +1,24 @@
+benchmarks:
+  bw:
+    ./params/bw/complex-noncompound-2k-16m.yaml:
+      - iovec
+      - bincode
+      - flat
+      - rsmpi
+scripts:
+  bw:
+    bincode:
+      script: './scripts/bw_bincode.sh'
+      env: {}
+    iovec:
+      script: './scripts/bw_iovec.sh'
+      env:
+        UCX_RNDV_THRESH: 1kb
+    rsmpi:
+      script: './scripts/bw_rsmpi.sh'
+      env:
+        OMPI_MCA_pml: ucx
+    flat:
+      script: './scripts/bw_flat.sh'
+      env:
+        UCX_RNDV_THRESH: 1kb
