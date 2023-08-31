@@ -29,15 +29,24 @@ where
             // same type
             mpi::request::multiple_scope(window_size, |scope, coll| {
                 if rank == 0 {
+                    let ptr = sbuf[..].as_ptr() as *const u8;
+                    let buf = unsafe {
+                        std::slice::from_raw_parts(ptr, sbuf.len() * std::mem::size_of::<T>())
+                    };
                     for _ in 0..window_size {
-                        coll.add(proc.immediate_send(scope, &sbuf[..]));
+                        coll.add(proc.immediate_send(scope, buf));
                     }
                 } else {
                     let mut tmp = &mut rbufs[..];
                     for _ in 0..window_size {
                         let (a, b) = tmp.split_at_mut(1);
                         tmp = b;
-                        let rreq = proc.immediate_receive_into(scope, &mut a[0][..sbuf.len()]);
+                        let rbuf = &mut a[0][..sbuf.len()];
+                        let ptr = rbuf[..].as_ptr() as *mut u8;
+                        let buf = unsafe {
+                            std::slice::from_raw_parts_mut(ptr, rbuf.len() * std::mem::size_of::<T>())
+                        };
+                        let rreq = proc.immediate_receive_into(scope, buf);
                         coll.add(rreq);
                     }
                 }
