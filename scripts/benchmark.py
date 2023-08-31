@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import yaml
+import uuid
 
 
 def parse_latency(fname):
@@ -63,9 +64,6 @@ finishers = {
     'bw': finish_result,
 }
 
-# Temporary output location for sbatch scripts
-output = 'tmp.out'
-
 parser = argparse.ArgumentParser(description='benchmark run script for Slurm')
 parser.add_argument('-e', '--env-file', help='environment file to load',
                     required=True)
@@ -75,6 +73,10 @@ parser.add_argument('-r', '--run-count', help='number of runs to do',
                     required=True, type=int)
 parser.add_argument('-c', '--config', help='benchmark config', required=True)
 args = parser.parse_args()
+
+# Temporary output location for sbatch scripts
+tmp_output = f'{uuid.uuid4().hex}.out'
+print('Using tmp file:', tmp_output)
 
 with open(args.config) as fp:
     config = yaml.load(fp, Loader=yaml.CLoader)
@@ -109,11 +111,11 @@ for benchmark, configs in benchmarks.items():
             # Run however many times specified by the args
             for run in range(args.run_count):
                 # Run the job until completion
-                subprocess.run(['sbatch', '-W', '-o', output, sbatch_script],
+                subprocess.run(['sbatch', '-W', '-o', tmp_output, sbatch_script],
                                env=env)
                 # Parse and save the results
                 parser = parsers[canonical_name(benchmark)]
-                results.append(parser(output))
+                results.append(parser(tmp_output))
             # Now combine the runs
             finished_result = finishers[canonical_name(benchmark)](results)
             config_result[test_name] = finished_result
@@ -123,6 +125,8 @@ for benchmark, configs in benchmarks.items():
         benchmark_result[config_prefix] = config_result
 
     all_results[benchmark] = benchmark_result
+
+os.remove(tmp_output)
 
 with open(args.output, 'w') as fp:
     json.dump(all_results, fp, indent=4)
