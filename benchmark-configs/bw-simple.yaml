@@ -1,0 +1,26 @@
+benchmarks:
+  bw:
+    ./params/bw/simple.yaml:
+      - iovec
+      - bincode
+      - flat
+      - rsmpi
+scripts:
+  bw:
+    bincode:
+      script: './scripts/bw_bincode.sh'
+      env: {}
+    iovec:
+      script: './scripts/bw_iovec.sh'
+      env:
+        # UCX_POSIX_SEG_SIZE: '65536'
+        UCX_RNDV_THRESH: 2kb
+    rsmpi:
+      script: './scripts/bw_rsmpi.sh'
+      env:
+        OMPI_MCA_pml: ucx
+    flat:
+      script: './scripts/bw_flat.sh'
+      env:
+        UCX_RNDV_THRESH: 2kb
+        # UCX_POSIX_SEG_SIZE: '65536'
