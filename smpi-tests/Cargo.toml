@@ -1,0 +1,7 @@
+[package]
+name = "smpi-tests"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+smpi = { path = "../smpi" }

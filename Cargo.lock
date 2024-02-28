@@ -908,6 +908,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "smpi-tests"
+version = "0.0.1"
+dependencies = [
+ "smpi",
+]
+
+[[package]]
 name = "smpi-ucx-backend"
 version = "0.1.0"
 dependencies = [
