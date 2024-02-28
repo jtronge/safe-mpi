@@ -1,7 +1,0 @@
-[package]
-name = "iovec"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-ucx2-sys = { path = "../ucx2-sys" }

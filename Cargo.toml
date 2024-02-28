@@ -1,12 +1,7 @@
 [workspace]
 members = [
-    "ucx2-sys",
-    "safe-mpi",
-    "msgpk-test",
-    "iovec",
-    "benchmarks",
-    "datatypes",
-    "flat",
-    "flat-derive",
-    "multirank",
+    "smpi",
+    "smpi-ucx-backend",
+    "smpi-ucx-sys",
+    "smpi-benchmarks",
 ]
