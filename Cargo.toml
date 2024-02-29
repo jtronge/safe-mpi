@@ -6,3 +6,4 @@ members = [
     "smpi-ucx-sys",
     "smpi-benchmarks",
 ]
+resolver = "2"

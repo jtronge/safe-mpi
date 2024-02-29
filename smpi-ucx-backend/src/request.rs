@@ -5,6 +5,7 @@ use crate::{
 };
 use log::info;
 use std::cell::RefCell;
+use std::default::Default;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::os::raw::c_void;
@@ -13,6 +14,7 @@ use smpi_ucx_sys::{
     rust_ucp_dt_make_contig, rust_ucs_ptr_is_err, rust_ucs_ptr_is_ptr, rust_ucs_ptr_status,
     ucp_dt_iov, ucp_request_free, ucp_request_param_t, ucp_tag_msg_recv_nbx, ucp_tag_probe_nb,
     ucp_tag_recv_info_t, ucp_tag_recv_nbx, ucp_tag_send_nbx, ucp_worker_h, ucp_worker_progress,
+    ucp_request_param_t__bindgen_ty_1,
     UCP_DATATYPE_IOV, UCP_OP_ATTR_FIELD_CALLBACK, UCP_OP_ATTR_FIELD_DATATYPE,
     UCP_OP_ATTR_FIELD_USER_DATA, UCP_OP_ATTR_FLAG_NO_IMM_CMPL, UCS_INPROGRESS, UCS_OK,
 };
@@ -78,14 +80,20 @@ impl<'a> SendIovRequest<'a> {
                 iov,
             )
         };
-        let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
-        param.op_attr_mask =
-            UCP_OP_ATTR_FIELD_DATATYPE | UCP_OP_ATTR_FIELD_CALLBACK | UCP_OP_ATTR_FIELD_USER_DATA;
-        param.datatype = datatype;
-        param.cb.send = Some(send_nbx_callback);
         // Callback info
         let cb_info: *mut bool = Box::into_raw(Box::new(false));
-        param.user_data = cb_info as *mut _;
+        let cb = ucp_request_param_t__bindgen_ty_1 {
+            send: Some(send_nbx_callback),
+        };
+        let param = ucp_request_param_t {
+            op_attr_mask: UCP_OP_ATTR_FIELD_DATATYPE
+                          | UCP_OP_ATTR_FIELD_CALLBACK
+                          | UCP_OP_ATTR_FIELD_USER_DATA,
+            datatype: datatype,
+            cb,
+            user_data: cb_info as *mut _,
+            ..Default::default()
+        };
 
         let req = ucp_tag_send_nbx(endpoint, ptr, len, tag, &param);
         Ok(SendIovRequest {
@@ -175,16 +183,20 @@ impl<'a> RecvIovRequest<'a> {
                 iov,
             )
         };
-        let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
-        param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE
-            | UCP_OP_ATTR_FIELD_CALLBACK
-            | UCP_OP_ATTR_FIELD_USER_DATA
-            | UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
-        param.datatype = datatype;
-        param.cb.recv = Some(tag_recv_nbx_callback);
         // Callback info
         let cb_info: *mut bool = Box::into_raw(Box::new(false));
-        param.user_data = cb_info as *mut _;
+        let param = ucp_request_param_t {
+            op_attr_mask: UCP_OP_ATTR_FIELD_DATATYPE
+                          | UCP_OP_ATTR_FIELD_CALLBACK
+                          | UCP_OP_ATTR_FIELD_USER_DATA
+                          | UCP_OP_ATTR_FLAG_NO_IMM_CMPL,
+            datatype: datatype,
+            cb: ucp_request_param_t__bindgen_ty_1 {
+                recv: Some(tag_recv_nbx_callback),
+            },
+            user_data: cb_info as *mut _,
+            ..Default::default()
+        };
 
         let req = ucp_tag_recv_nbx(worker, ptr, len, tag, 0, &param);
         Ok(RecvIovRequest {
@@ -284,14 +296,19 @@ impl<'a> SendRequest<'a> {
                 )
             }
         };
-        let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
-        param.op_attr_mask =
-            UCP_OP_ATTR_FIELD_DATATYPE | UCP_OP_ATTR_FIELD_CALLBACK | UCP_OP_ATTR_FIELD_USER_DATA;
-        param.datatype = datatype;
-        param.cb.send = Some(send_nbx_callback);
         // Callback info
         let cb_info: *mut bool = Box::into_raw(Box::new(false));
-        param.user_data = cb_info as *mut _;
+        let param = ucp_request_param_t {
+            op_attr_mask: UCP_OP_ATTR_FIELD_DATATYPE
+                          | UCP_OP_ATTR_FIELD_CALLBACK
+                          | UCP_OP_ATTR_FIELD_USER_DATA,
+            datatype: datatype,
+            cb: ucp_request_param_t__bindgen_ty_1 {
+                send: Some(send_nbx_callback),
+            },
+            user_data: cb_info as *mut _,
+            ..Default::default()
+        };
 
         let req = ucp_tag_send_nbx(endpoint, ptr, len, tag, &param);
         Ok(SendRequest {
@@ -433,14 +450,18 @@ impl Request for RecvProbeRequest {
                     self.state = RecvProbeRequestState::Wait;
                     let info = info.assume_init();
                     let _ = self.data.insert(vec![0; info.length]);
-                    let mut param = MaybeUninit::<ucp_request_param_t>::uninit().assume_init();
-                    param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK
-                        | UCP_OP_ATTR_FIELD_DATATYPE
-                        | UCP_OP_ATTR_FIELD_USER_DATA
-                        | UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
-                    param.datatype = rust_ucp_dt_make_contig(1).try_into().unwrap();
-                    param.cb.recv = Some(tag_recv_nbx_callback);
-                    param.user_data = self.complete as *mut _;
+                    let param = ucp_request_param_t {
+                        op_attr_mask: UCP_OP_ATTR_FIELD_CALLBACK
+                                      | UCP_OP_ATTR_FIELD_DATATYPE
+                                      | UCP_OP_ATTR_FIELD_USER_DATA
+                                      | UCP_OP_ATTR_FLAG_NO_IMM_CMPL,
+                        datatype: rust_ucp_dt_make_contig(1).try_into().unwrap(),
+                        cb: ucp_request_param_t__bindgen_ty_1 {
+                            recv: Some(tag_recv_nbx_callback),
+                        },
+                        user_data: self.complete as *mut _,
+                        ..Default::default()
+                    };
                     self.req = ucp_tag_msg_recv_nbx(
                         worker,
                         self.data.as_mut().unwrap().as_mut_ptr() as *mut _,
