@@ -1,10 +1,9 @@
 [package]
-name = "smpi"
-version = "0.1.0"
+name = "smpi-sm-provider"
+version = "0.0.1"
 edition = "2021"
 
 [dependencies]
 smpi-base = { path = "../smpi-base" }
 smpi-runtime = { path = "../smpi-runtime" }
-smpi-sm-provider = { path = "../smpi-sm-provider" }
 futures = { version = "0.3.30", features = ["executor"] }

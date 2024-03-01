@@ -45,8 +45,6 @@ mod util;
 use util::wait_loop;
 mod callbacks;
 mod request;
-mod provider;
-mod providers;
 pub use request::{Request, RequestStatus};
 
 #[derive(Debug, Copy, Clone)]

@@ -1,6 +1,9 @@
 [workspace]
 members = [
     "smpi",
+    "smpi-base",
+    "smpi-runtime",
+    "smpi-sm-provider",
     "smpi-tests",
     "smpi-ucx-backend",
     "smpi-ucx-sys",
