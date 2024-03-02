@@ -1,32 +1,15 @@
 //! SMPI base data structures and traits.
 use std::future::Future;
 
+mod buffer;
+pub use buffer::{BufRead, BufWrite};
+
 #[derive(Debug)]
 pub enum Error {
     NotImplemented,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
-
-// TODO: impl From for basic types with the below buffers
-
-/// Trait for reading into a buffer (partially based on RSMPI's trait system).
-pub unsafe trait BufRead {
-    /// Return a buffer pointer and size in bytes.
-    fn buffer(&self) -> (*const u8, usize);
-
-    /// Return the type ID of the encoded type.
-    fn type_id(&self) -> u64;
-}
-
-/// Trait for writing into a buffer (partially based on RSMPI's trait system).
-pub unsafe trait BufWrite {
-    /// Return the buffer pointer and size in bytes.
-    fn buffer(&mut self) -> (*mut u8, usize);
-
-    /// Return the type ID of the encdoed type.
-    fn type_id(&self) -> u64;
-}
 
 /// Reachability enum indicating whether or not a certain rank is reachable
 /// from this provider and how good the connection is.
