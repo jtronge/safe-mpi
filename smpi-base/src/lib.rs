@@ -6,7 +6,11 @@ pub use buffer::{BufRead, BufWrite};
 
 #[derive(Debug)]
 pub enum Error {
+    /// Feature not implemented
     NotImplemented,
+
+    /// Could not reach the requested process
+    Unreachable,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -28,13 +32,13 @@ pub trait Provider {
 
     fn send_nb(
         &self,
-        data: Box<dyn BufRead>,
+        data: &dyn BufRead,
         target: u64,
-    ) -> Box<dyn Future<Output = Result<Box<dyn BufRead>>>>;
+    ) -> Box<dyn Future<Output = Result<Box<dyn BufRead>>> + Unpin>;
 
     fn recv_nb(
         &self,
-        data: Box<dyn BufWrite>,
+        data: &dyn BufWrite,
         source: u64,
-    ) -> Box<dyn Future<Output = Result<Box<dyn BufWrite>>>>;
+    ) -> Box<dyn Future<Output = Result<Box<dyn BufWrite>>> + Unpin>;
 }

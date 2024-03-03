@@ -42,10 +42,7 @@ impl Communicator {
         data: T,
         target: u64,
     ) -> impl Future<Output = Result<T>> {
-        assert!(target < self.size());
-        async move {
-            Err(Error::NotImplemented)
-        }
+        self.p2p_manager.send_nb(data, target)
     }
 
     /// Send a message to another process (blocking).
@@ -58,17 +55,14 @@ impl Communicator {
     /// Non-blocking receive a message from another process.
     fn recv_nb<T: BufWrite>(
         &self,
-        data: Option<T>,
+        data: T,
         source: u64,
     ) -> impl Future<Output = Result<T>> {
-        assert!(source < self.size());
-        async move {
-            Err(Error::NotImplemented)
-        }
+        self.p2p_manager.recv_nb(data, source)
     }
 
     /// Receive a message from another process (blocking).
-    fn recv<T: BufWrite>(&self, data: Option<T>, source: u64) -> Result<T> {
+    fn recv<T: BufWrite>(&self, data: T, source: u64) -> Result<T> {
         executor::block_on(self.recv_nb(data, source))
     }
 }

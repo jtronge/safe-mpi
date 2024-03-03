@@ -1,6 +1,6 @@
 //! Buffer traits and implementations (partially based on the data and trait
 //! system used in RSMPI).
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::mem;
 
