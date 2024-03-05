@@ -1,5 +1,5 @@
 [package]
-name = "smpi-sm-provider"
+name = "smpi-p2p-node"
 version = "0.0.1"
 edition = "2021"
 
@@ -7,3 +7,4 @@ edition = "2021"
 smpi-base = { path = "../smpi-base" }
 smpi-runtime = { path = "../smpi-runtime" }
 futures = { version = "0.3.30", features = ["executor"] }
+posixmq = "1.0.0"

@@ -3,7 +3,7 @@ members = [
     "smpi",
     "smpi-base",
     "smpi-runtime",
-    "smpi-sm-provider",
+    "smpi-p2p-node",
     "smpi-tests",
     "smpi-ucx-backend",
     "smpi-ucx-sys",

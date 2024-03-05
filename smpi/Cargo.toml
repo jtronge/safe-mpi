@@ -6,5 +6,5 @@ edition = "2021"
 [dependencies]
 smpi-base = { path = "../smpi-base" }
 smpi-runtime = { path = "../smpi-runtime" }
-smpi-sm-provider = { path = "../smpi-sm-provider" }
+smpi-p2p-node = { path = "../smpi-p2p-node" }
 futures = { version = "0.3.30", features = ["executor"] }

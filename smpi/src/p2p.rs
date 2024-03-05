@@ -2,25 +2,29 @@
 use std::future::Future;
 use std::pin::pin;
 use std::sync::{Arc, Mutex};
-use smpi_base::{Result, Error, BufRead, BufWrite, Reachability, Provider};
+use smpi_base::{Result, Error, BufRead, BufWrite, Reachability, P2PProvider};
 use smpi_runtime::Runtime;
+use smpi_p2p_node::NodeP2P;
 
 /// Internal data structure for managing P2P calls.
 pub(crate) struct Manager {
     runtime: Arc<Mutex<Runtime>>,
-    providers: Vec<Arc<Box<dyn Provider>>>,
+    providers: Vec<Arc<Box<dyn P2PProvider>>>,
 }
 
 impl Manager {
     pub(crate) fn new(runtime: Arc<Mutex<Runtime>>) -> Manager {
+        let providers: Vec<Arc<Box<dyn P2PProvider>>> = vec![
+            Arc::new(Box::new(NodeP2P::new(Arc::clone(&runtime)))),
+        ];
         Manager {
             runtime,
-            providers: vec![],
+            providers,
         }
     }
 
     /// Determine the best provider for the target process.
-    fn best_provider(&self, target_id: u64) -> Option<Arc<Box<dyn Provider>>> {
+    fn best_provider(&self, target_id: u64) -> Option<Arc<Box<dyn P2PProvider>>> {
         let mut best_i = None;
         let mut best_result = None;
         for (i, provider) in self.providers.iter().enumerate() {
@@ -49,6 +53,7 @@ impl Manager {
         }
     }
 
+    /// Non-blocking send a message to another process.
     pub(crate) fn send_nb<T: BufRead>(
         &self,
         data: T,
@@ -57,9 +62,13 @@ impl Manager {
         let provider = self.best_provider(target);
         async move {
             if let Some(provider) = provider {
-                pin!(provider)
-                    .send_nb(&data, target)
-                    .await?;
+                // SAFETY: The pointer passed from BufRead is valid as long as
+                //         'data' is not moved
+                unsafe {
+                    pin!(provider)
+                        .send_nb(data.ptr(), data.size(), target)
+                        .await?;
+                }
                 Ok(data)
             } else {
                 Err(Error::Unreachable)
@@ -70,15 +79,19 @@ impl Manager {
     /// Non-blocking receive a message from another process.
     pub(crate) fn recv_nb<T: BufWrite>(
         &self,
-        data: T,
+        mut data: T,
         source: u64,
     ) -> impl Future<Output = Result<T>> {
         let provider = self.best_provider(source);
         async move {
             if let Some(provider) = provider {
-                pin!(provider)
-                    .recv_nb(&data, source)
-                    .await?;
+                // SAFETY: The BufWrite pointer here is valid as long as 'data'
+                //         is not moved.
+                unsafe {
+                    pin!(provider)
+                        .recv_nb(data.ptr_mut(), data.size(), source)
+                        .await?;
+                }
                 Ok(data)
             } else {
                 Err(Error::Unreachable)

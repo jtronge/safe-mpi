@@ -1,5 +1,6 @@
 //! SMPI base data structures and traits.
 use std::future::Future;
+use std::pin::Pin;
 
 mod buffer;
 pub use buffer::{BufRead, BufWrite};
@@ -26,19 +27,21 @@ pub enum Reachability {
 }
 
 /// Point to point provider implementation
-pub trait Provider {
+pub trait P2PProvider {
     /// Return the "reachability" for another process using this provider.
     fn reachability(&self, id: u64) -> Reachability;
 
-    fn send_nb(
+    unsafe fn send_nb(
         &self,
-        data: &dyn BufRead,
+        buf: *const u8,
+        size: usize,
         target: u64,
-    ) -> Box<dyn Future<Output = Result<Box<dyn BufRead>>> + Unpin>;
+    ) -> Pin<Box<dyn Future<Output = Result<()>>>>;
 
-    fn recv_nb(
+    unsafe fn recv_nb(
         &self,
-        data: &dyn BufWrite,
+        buf: *mut u8,
+        size: usize,
         source: u64,
-    ) -> Box<dyn Future<Output = Result<Box<dyn BufWrite>>> + Unpin>;
+    ) -> Pin<Box<dyn Future<Output = Result<()>>>>;
 }
