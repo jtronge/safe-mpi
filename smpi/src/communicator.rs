@@ -37,7 +37,7 @@ impl Communicator {
     ///
     /// This method takes ownership of the data buffer and returns it on
     /// completion.
-    fn send_nb<T: BufRead>(
+    pub fn send_nb<T: BufRead>(
         &self,
         data: T,
         target: u64,
@@ -48,12 +48,12 @@ impl Communicator {
     /// Send a message to another process (blocking).
     ///
     /// Takes ownership of data buffer and returns it on completion.
-    fn send<T: BufRead>(&self, data: T, target: u64) -> Result<T> {
+    pub fn send<T: BufRead>(&self, data: T, target: u64) -> Result<T> {
         executor::block_on(self.send_nb(data, target))
     }
 
     /// Non-blocking receive a message from another process.
-    fn recv_nb<T: BufWrite>(
+    pub fn recv_nb<T: BufWrite>(
         &self,
         data: T,
         source: u64,
@@ -62,7 +62,7 @@ impl Communicator {
     }
 
     /// Receive a message from another process (blocking).
-    fn recv<T: BufWrite>(&self, data: T, source: u64) -> Result<T> {
+    pub fn recv<T: BufWrite>(&self, data: T, source: u64) -> Result<T> {
         executor::block_on(self.recv_nb(data, source))
     }
 }

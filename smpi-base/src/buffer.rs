@@ -4,9 +4,13 @@ use std::any::{Any, TypeId};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::mem;
 
-pub trait Buffer {
+pub trait Buffer: 'static {
     /// Return the type ID of the encdoed type.
-    fn type_id(&self) -> u64;
+    fn type_id(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        TypeId::of::<Self>().hash(&mut hasher);
+        hasher.finish()
+    }
 
     /// Return the size of the buffer in bytes.
     fn size(&self) -> usize;
@@ -24,13 +28,25 @@ pub unsafe trait BufWrite: Buffer {
     fn ptr_mut(&mut self) -> *mut u8;
 }
 
-impl<T: Copy + 'static> Buffer for Vec<T> {
-    fn type_id(&self) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        TypeId::of::<T>().hash(&mut hasher);
-        hasher.finish()
+impl Buffer for i32 {
+    fn size(&self) -> usize {
+        mem::size_of::<i32>()
     }
+}
 
+unsafe impl BufRead for i32 {
+    fn ptr(&self) -> *const u8 {
+        (self as *const i32) as *const _
+    }
+}
+
+unsafe impl BufWrite for i32 {
+    fn ptr_mut(&mut self) -> *mut u8 {
+        (self as *mut i32) as *mut _
+    }
+}
+
+impl<T: Copy + 'static> Buffer for Vec<T> {
     fn size(&self) -> usize {
         mem::size_of::<T>() * self.len()
     }

@@ -8,3 +8,4 @@ smpi-base = { path = "../smpi-base" }
 smpi-runtime = { path = "../smpi-runtime" }
 smpi-p2p-node = { path = "../smpi-p2p-node" }
 futures = { version = "0.3.30", features = ["executor"] }
+tokio = { version = "1.36", features = ["rt-multi-thread"] }
