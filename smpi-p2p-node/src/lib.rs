@@ -6,9 +6,12 @@ use std::sync::{Arc, Mutex};
 use std::future::Future;
 use std::pin::Pin;
 use std::collections::HashMap;
+use std::cell::Cell;
 use tokio::sync::mpsc;
 use smpi_runtime::Runtime;
 use smpi_base::{Result, Error, BufRead, BufWrite, Reachability, P2PProvider};
+
+const PACKET_SIZE: usize = 1024;
 
 /// Packet of data sent between processes.
 #[repr(C)]
@@ -23,7 +26,7 @@ struct Packet {
     len: usize,
 
     /// Sent data
-    data: [u8; 1024],
+    data: [u8; PACKET_SIZE],
 }
 
 /// Mechanism for performing IPC between processes.
@@ -46,7 +49,7 @@ pub struct NodeP2P {
     local_processes: HashMap<u64, Arc<Mutex<IPCMechanism>>>,
 
     /// Next message ID to pass
-    next_msg_id: u64,
+    next_msg_id: Cell<u64>,
 
     /// Transmitter for the progress thread
     progress_tx: mpsc::Sender<Packet>,
@@ -77,7 +80,7 @@ impl NodeP2P {
         NodeP2P {
             runtime,
             local_processes,
-            next_msg_id: 0,
+            next_msg_id: Cell::new(0),
             progress_tx,
         }
     }
@@ -108,8 +111,18 @@ impl P2PProvider for NodeP2P {
         target: u64,
     ) -> Pin<Box<dyn Future<Output = Result<()>>>> {
         let ipc = self.find_ipc(target);
-        Box::pin(async {
+        let msg_id = self.next_msg_id.get();
+        self.next_msg_id.set(msg_id + 1);
+
+        Box::pin(async move {
             let ipc = ipc.ok_or(Error::Unreachable)?;
+
+            // Iterate over packets
+            for (off, mut pkt) in split_into_packets(msg_id, size) {
+                // Copy the buffer into the packet
+                std::ptr::copy(buf.offset(off), &mut pkt.data as *mut _, pkt.len);
+                // TODO: Send packet across channel to progress thread
+            }
 
             Ok(())
         })
@@ -123,10 +136,35 @@ impl P2PProvider for NodeP2P {
         source: u64,
     ) -> Pin<Box<dyn Future<Output = Result<()>>>> {
         let ipc = self.find_ipc(source);
+        let msg_id = self.next_msg_id.get();
+        self.next_msg_id.set(msg_id + 1);
+
         Box::pin(async {
             let ipc = ipc.ok_or(Error::Unreachable)?;
 
             Err(Error::Unreachable)
         })
     }
+}
+
+/// Generate an iterator over empty packets with offsets for reading from or writing to.
+fn split_into_packets(msg_id: u64, size: usize) -> impl Iterator<Item = (isize, Packet)> {
+    let total_pkts = size / PACKET_SIZE + if (size % PACKET_SIZE) != 0 { 1 } else { 0 };
+    (0..total_pkts)
+        .map(move |i| {
+            let off = i * PACKET_SIZE;
+            let len = if (off + PACKET_SIZE) > size { size - off } else { PACKET_SIZE };
+            (off.try_into().unwrap(), i.try_into().unwrap(), len)
+        })
+        .map(move |(off, packet_id, len)| {
+            (
+                off,
+                Packet {
+                    msg_id,
+                    packet_id,
+                    len,
+                    data: [0; PACKET_SIZE],
+                }
+            )
+        })
 }
