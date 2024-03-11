@@ -52,7 +52,10 @@ pub struct NodeP2P {
     next_msg_id: Cell<u64>,
 
     /// Transmitter for the progress thread
-    progress_tx: mpsc::Sender<Packet>,
+    out_packets: mpsc::Sender<Packet>,
+
+    /// Receiver for incoming packets from the progress thread
+    in_packets: mpsc::Receiver<Packet>,
 }
 
 impl NodeP2P {
@@ -70,9 +73,10 @@ impl NodeP2P {
             .collect();
 
         // Spawn the progress thread
-        let (progress_tx, mut progress_rx) = mpsc::channel(64);
+        let (out_packets, mut out_packets_progress) = mpsc::channel(64);
+        let (in_packets_progress, in_packets) = mpsc::channel(64);
         tokio::spawn(async move {
-            while let Some(packet) = progress_rx.recv().await {
+            while let Some(packet) = out_packets_progress.recv().await {
                 // TODO
             }
         });
@@ -81,7 +85,8 @@ impl NodeP2P {
             runtime,
             local_processes,
             next_msg_id: Cell::new(0),
-            progress_tx,
+            out_packets,
+            in_packets,
         }
     }
 
@@ -114,6 +119,7 @@ impl P2PProvider for NodeP2P {
         let msg_id = self.next_msg_id.get();
         self.next_msg_id.set(msg_id + 1);
 
+        let out_packets = self.out_packets.clone();
         Box::pin(async move {
             let ipc = ipc.ok_or(Error::Unreachable)?;
 
@@ -121,7 +127,11 @@ impl P2PProvider for NodeP2P {
             for (off, mut pkt) in split_into_packets(msg_id, size) {
                 // Copy the buffer into the packet
                 std::ptr::copy(buf.offset(off), &mut pkt.data as *mut _, pkt.len);
-                // TODO: Send packet across channel to progress thread
+                // Send it to progress thread
+                out_packets
+                    .send(pkt)
+                    .await
+                    .expect("failed to send packet to progress thread");
             }
 
             Ok(())
