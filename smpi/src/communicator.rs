@@ -2,7 +2,7 @@
 use std::sync::{Arc, Mutex};
 use std::future::Future;
 use futures::executor;
-use smpi_base::{Result, Error, BufRead, BufWrite};
+use smpi_base::{Result, BufRead, BufWrite};
 use smpi_runtime::Runtime;
 use crate::p2p;
 

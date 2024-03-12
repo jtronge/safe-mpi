@@ -12,6 +12,9 @@ pub enum Error {
 
     /// Could not reach the requested process
     Unreachable,
+
+    /// Message transmission failed
+    MessageTransmissionFailure,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -35,6 +38,7 @@ pub trait P2PProvider {
         &self,
         buf: *const u8,
         size: usize,
+        type_id: u64,
         target: u64,
     ) -> Pin<Box<dyn Future<Output = Result<()>>>>;
 
@@ -42,6 +46,7 @@ pub trait P2PProvider {
         &self,
         buf: *mut u8,
         size: usize,
+        type_id: u64,
         source: u64,
     ) -> Pin<Box<dyn Future<Output = Result<()>>>>;
 }

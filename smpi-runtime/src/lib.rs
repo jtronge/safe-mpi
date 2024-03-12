@@ -25,6 +25,6 @@ impl Runtime {
     /// Return an iterator over the IDs of all processes that are on the given
     /// node.
     pub fn node_process_ids(&self, node_id: u64) -> impl Iterator<Item = u64> {
-        (0..1)
+        0..1
     }
 }

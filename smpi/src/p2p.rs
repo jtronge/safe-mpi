@@ -66,7 +66,7 @@ impl Manager {
                 //         'data' is not moved
                 unsafe {
                     pin!(provider)
-                        .send_nb(data.ptr(), data.size(), target)
+                        .send_nb(data.ptr(), data.size(), T::type_id(), target)
                         .await?;
                 }
                 Ok(data)
@@ -89,7 +89,7 @@ impl Manager {
                 //         is not moved.
                 unsafe {
                     pin!(provider)
-                        .recv_nb(data.ptr_mut(), data.size(), source)
+                        .recv_nb(data.ptr_mut(), data.size(), T::type_id(), source)
                         .await?;
                 }
                 Ok(data)

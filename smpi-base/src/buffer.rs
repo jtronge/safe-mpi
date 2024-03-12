@@ -1,12 +1,12 @@
 //! Buffer traits and implementations (partially based on the data and trait
 //! system used in RSMPI).
-use std::any::{Any, TypeId};
+use std::any::TypeId;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::mem;
 
 pub trait Buffer: 'static {
     /// Return the type ID of the encdoed type.
-    fn type_id(&self) -> u64 {
+    fn type_id() -> u64 {
         let mut hasher = DefaultHasher::new();
         TypeId::of::<Self>().hash(&mut hasher);
         hasher.finish()

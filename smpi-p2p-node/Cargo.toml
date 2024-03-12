@@ -8,4 +8,4 @@ smpi-base = { path = "../smpi-base" }
 smpi-runtime = { path = "../smpi-runtime" }
 futures = { version = "0.3.30", features = ["executor"] }
 posixmq = "1.0.0"
-tokio = { version = "1.36", features = ["rt", "sync"] }
+tokio = { version = "1.36", features = ["rt", "sync", "time"] }
