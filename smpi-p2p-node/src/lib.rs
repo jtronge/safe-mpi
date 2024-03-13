@@ -6,10 +6,14 @@ use std::sync::{Arc, Mutex};
 use std::future::Future;
 use std::pin::Pin;
 use std::cell::Cell;
+use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio::time;
 use smpi_runtime::Runtime;
 use smpi_base::{Result, Error, BufRead, BufWrite, Reachability, P2PProvider};
+
+mod queue;
+use queue::Queue;
 
 const PACKET_SIZE: usize = 1024;
 
@@ -69,14 +73,18 @@ impl NodeP2P {
         let runtime_handle = runtime2.lock().unwrap();
         let id = runtime_handle.id();
         let node_id = runtime_handle.node_id();
-        let local_processes = runtime_handle.node_process_ids(node_id).collect();
+        let local_processes: Vec<u64> = runtime_handle.node_process_ids(node_id).collect();
 
         // Spawn the progress thread
         let (out_packets, mut out_packets_progress) = mpsc::channel(64);
         let in_packets_progress = Arc::new(Mutex::new(vec![]));
         let in_packets = Arc::clone(&in_packets_progress);
+        let queues: HashMap<u64, Queue> = local_processes
+            .iter()
+            .map(|other_id| (*other_id, Queue::new(node_id, id, *other_id)))
+            .collect();
         tokio::spawn(async move {
-            while let Some(packet) = out_packets_progress.recv().await {
+            while let Some((target, pkt)) = out_packets_progress.recv().await {
                 // TODO
                 // Use unix socket for now, but should use message queue or something else later on
             }
