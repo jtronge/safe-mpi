@@ -8,5 +8,6 @@ members = [
     "smpi-ucx-backend",
     "smpi-ucx-sys",
     "smpi-benchmarks",
+    "smpi-exec",
 ]
 resolver = "2"
