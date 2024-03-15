@@ -15,7 +15,7 @@ impl Communicator {
     /// Internal initialization function.
     pub(crate) fn new() -> Communicator {
         let runtime = Runtime::new();
-        let runtime = Arc::new(Mutex::new(Runtime));
+        let runtime = Arc::new(Mutex::new(Runtime::new()));
         let p2p_manager = p2p::Manager::new(Arc::clone(&runtime));
         Communicator {
             runtime,

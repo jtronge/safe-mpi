@@ -1,10 +1,20 @@
 //! Message passing runtime and process management code.
+use std::net::TcpStream;
+use std::env;
 
-pub struct Runtime;
+pub struct Runtime {
+    stream: TcpStream,
+}
 
 impl Runtime {
     pub fn new() -> Runtime {
-        Runtime
+        let runtime_addr = env::var("SMPI_RUNTIME_ADDR")
+            .expect("failed to retrieve SMPI runtime address");
+        let stream = TcpStream::connect(&runtime_addr)
+            .expect("failed to connect to runtime");
+        Runtime {
+            stream,
+        }
     }
 
     /// Return the total number of processes.
