@@ -73,7 +73,7 @@ impl NodeP2P {
         let runtime_handle = runtime2.lock().unwrap();
         let id = runtime_handle.id();
         let node_id = runtime_handle.node_id();
-        let local_processes: Vec<u64> = runtime_handle.node_process_ids(node_id).collect();
+        let local_processes = runtime_handle.node_process_ids(node_id);
 
         // Spawn the progress thread
         let (out_packets, mut out_packets_progress) = mpsc::channel(64);

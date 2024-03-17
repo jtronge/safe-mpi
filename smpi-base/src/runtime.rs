@@ -9,7 +9,7 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize)]
 pub enum Key {
     /// Return the processes on the local node
-    ProcessesOnNode,
+    ProcessesOnNode(u64),
 }
 
 /// Request made by a process to the runtime engine.

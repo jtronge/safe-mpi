@@ -4,7 +4,7 @@ use std::pin::Pin;
 
 mod buffer;
 pub use buffer::{BufRead, BufWrite};
-mod runtime;
+pub mod runtime;
 
 #[derive(Debug)]
 pub enum Error {

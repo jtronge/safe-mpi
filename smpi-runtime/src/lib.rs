@@ -1,9 +1,30 @@
 //! Message passing runtime and process management code.
+use std::io::prelude::*;
 use std::net::TcpStream;
 use std::env;
+use serde::de::DeserializeOwned;
+use smpi_base::runtime::Key;
+
+struct RuntimeEngine {
+    stream: TcpStream,
+}
+
+impl RuntimeEngine {
+    fn new(stream: TcpStream) -> RuntimeEngine {
+        RuntimeEngine {
+            stream,
+        }
+    }
+
+    /// Retrieve the value for a key from the backend runtime engine.
+    fn get<T: DeserializeOwned>(&self, key: Key) -> Option<T> {
+        // TODO
+        None
+    }
+}
 
 pub struct Runtime {
-    stream: TcpStream,
+    engine: RuntimeEngine,
 }
 
 impl Runtime {
@@ -13,7 +34,7 @@ impl Runtime {
         let stream = TcpStream::connect(&runtime_addr)
             .expect("failed to connect to runtime");
         Runtime {
-            stream,
+            engine: RuntimeEngine::new(stream),
         }
     }
 
@@ -34,7 +55,9 @@ impl Runtime {
 
     /// Return an iterator over the IDs of all processes that are on the given
     /// node.
-    pub fn node_process_ids(&self, node_id: u64) -> impl Iterator<Item = u64> {
-        0..1
+    pub fn node_process_ids(&self, node_id: u64) -> Vec<u64> {
+        self.engine
+            .get(Key::ProcessesOnNode(node_id))
+            .expect("failed to retrieve node process IDs")
     }
 }
