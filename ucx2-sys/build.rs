@@ -22,7 +22,8 @@ fn main() {
         .header("src/ucx.h")
         // Just ucp for now
         // .allowlist_function("ucp_.*")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .derive_default(true)
         .prepend_enum_name(false);
     // Make sure to add in the include paths
     let mut clang_args = vec![];
