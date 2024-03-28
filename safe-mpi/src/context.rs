@@ -27,12 +27,12 @@ impl Context {
         unsafe {
             // Now create the single endpoint (this will change for multiple processes)
             let mut endpoint = MaybeUninit::<ucp_ep_h>::uninit();
-            let mut params = MaybeUninit::<ucp_ep_params_t>::uninit().assume_init();
-            let field_mask =
-                UCP_EP_PARAM_FIELD_REMOTE_ADDRESS | UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE;
-            params.field_mask = field_mask.into();
-            params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
-            params.address = self.handle.borrow().other_addr.as_ptr() as *const _;
+            let params = ucp_ep_params_t {
+                field_mask: (UCP_EP_PARAM_FIELD_REMOTE_ADDRESS | UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE).into(),
+                err_mode: UCP_ERR_HANDLING_MODE_PEER,
+                address: self.handle.borrow().other_addr.as_ptr() as *const _,
+                ..Default::default()
+            };
             let status = ucp_ep_create(self.handle.borrow().worker, &params, endpoint.as_mut_ptr());
             if status != UCS_OK {
                 panic!(

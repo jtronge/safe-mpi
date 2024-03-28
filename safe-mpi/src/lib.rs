@@ -102,10 +102,11 @@ pub fn init(sockaddr: SocketAddr, server: bool) -> Result<Context> {
     env_logger::init();
     unsafe {
         let mut context = MaybeUninit::<ucp_context_h>::uninit();
-        let mut params = MaybeUninit::<ucp_params_t>::uninit().assume_init();
-        params.field_mask = UCP_PARAM_FIELD_FEATURES.into();
-        let features = UCP_FEATURE_TAG | UCP_FEATURE_STREAM;
-        params.features = features.into();
+        let params = ucp_params_t {
+            field_mask: UCP_PARAM_FIELD_FEATURES.into(),
+            features: (UCP_FEATURE_TAG | UCP_FEATURE_STREAM).into(),
+            ..Default::default()
+        };
         let status = rust_ucp_init(&params, std::ptr::null(), context.as_mut_ptr());
         if status != UCS_OK {
             error!("Failed to create context: {}", status_to_string(status));
@@ -129,10 +130,12 @@ pub fn init(sockaddr: SocketAddr, server: bool) -> Result<Context> {
 unsafe fn create_worker(context: ucp_context_h) -> Result<ucp_worker_h> {
     // First create the worker
     let mut worker = MaybeUninit::<ucp_worker_h>::uninit();
-    let mut params = MaybeUninit::<ucp_worker_params_t>::uninit().assume_init();
-    params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE.into();
-    // One thread for now
-    params.thread_mode = UCS_THREAD_MODE_SINGLE;
+    let params = ucp_worker_params_t {
+        field_mask: UCP_WORKER_PARAM_FIELD_THREAD_MODE.into(),
+        // One thread for now
+        thread_mode: UCS_THREAD_MODE_SINGLE,
+        ..Default::default()
+    };
     let status = ucp_worker_create(context, &params, worker.as_mut_ptr());
     if status != UCS_OK {
         Err(Error::WorkerCreateFailed(status))
