@@ -9,4 +9,5 @@ members = [
     "datatypes",
     "flat",
     "flat-derive",
+    "mpirs",
 ]

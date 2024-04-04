@@ -617,6 +617,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mpirs"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.10.0",
+ "log",
+ "nalgebra",
+ "nix",
+ "serde",
+ "serde_json",
+ "ucx2-sys",
+]
+
+[[package]]
 name = "msgpk-test"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+# Run an MPIRS job.
+import argparse
+import os
+import shutil
+import subprocess
+
+# Rather than use a real PMI library, this is just passing process connection
+# info through environment variables.
+#
+# List of `ip:port` strings separated by `,`s for each process in job.
+ENV_CONN_LIST = 'MPIRS_CONN_LIST'
+# Integer rank for the given process.
+ENV_RANK = 'MPIRS_RANK'
+
+# Starting port number to use for address exchange.
+BASE_PORT = 8888
+
+IP = '127.0.0.1'
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='MPIRS job runner')
+    parser.add_argument('-n', '--ntasks', default=1, type=int, help='number of tasks to run on this node')
+    parser.add_argument('bin', help='path to binary to run')
+    args, bin_args = parser.parse_known_args()
+
+    # Determine ports and connection strings
+    ports = [BASE_PORT + rank for rank in range(args.ntasks)]
+    conns = [f'{IP}:{port}' for port in ports]
+    conn_list = ','.join(conns)
+
+    # Launch the processes
+    proc_args = [shutil.which(args.bin)]
+    proc_args.extend(bin_args)
+    env = dict(os.environ)
+    env[ENV_CONN_LIST] = conn_list
+    procs = []
+    for rank in range(args.ntasks):
+        env[ENV_RANK] = str(rank)
+        procs.append(subprocess.Popen(proc_args, env=env))
+
+    for proc in procs:
+        proc.wait()
